@@ -1,6 +1,6 @@
 {
   "name": "photo-printer-pro",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "main": "main.cjs",
   "description": "Professional Photo Printing Tool for print shops",
@@ -37,6 +37,7 @@
     "bindings": "^1.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "docx": "^8.5.0",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
     "face-api.js": "^0.22.2",
