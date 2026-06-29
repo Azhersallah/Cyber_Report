@@ -1,0 +1,21 @@
+name = "pppro-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+account_id = "c683b94f793c1262e6dc8117bab32d90"
+
+# Durable Objects - all data stored here (SQLite-backed for free plan)
+[durable_objects]
+bindings = [
+  { name = "LICENSE_SESSIONS", class_name = "LicenseSession" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LicenseSession"]
+
+[vars]
+ADMIN_EMAIL = "azhersallah1@gmail.com"
+
+# Secrets (set via: wrangler secret put <NAME>):
+# - LICENSE_TOKEN_SECRET
+# - ADMIN_PASSWORD_HASH

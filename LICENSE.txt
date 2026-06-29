@@ -1,0 +1,26 @@
+Photo Printer Pro - End User License Agreement
+
+Copyright (c) 2024 Azher Sallah. All rights reserved.
+
+This software is licensed, not sold. By installing or using this software, 
+you agree to the following terms:
+
+1. LICENSE GRANT
+   You are granted a non-exclusive, non-transferable license to use this 
+   software for personal or commercial purposes.
+
+2. RESTRICTIONS
+   You may not:
+   - Reverse engineer, decompile, or disassemble the software
+   - Redistribute or resell the software
+   - Remove any proprietary notices or labels
+
+3. DISCLAIMER
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+4. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DAMAGES ARISING FROM 
+   THE USE OF THIS SOFTWARE.
+
+For support: azhersallah@gmail.com
+Website: https://photoprinterpro.netlify.app

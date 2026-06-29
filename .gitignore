@@ -1,0 +1,47 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Build outputs and large files
+release/
+*.exe
+*.blockmap
+*.asar
+latest.yml
+
+# Sensitive files
+.env
+.env.local
+service-account.json
+app.config.dat
+
+# Unnecessary folders
+LicenseManager/
+LicenseManagerApp/
+license-manager-web/
+[full_path_of_file_1]
+[full_path_of_file_2]
+
+# Local Netlify folder
+.netlify

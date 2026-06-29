@@ -1,0 +1,281 @@
+/* Local Font Imports */
+@import '@fontsource/inter/300.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/noto-kufi-arabic/300.css';
+@import '@fontsource/noto-kufi-arabic/400.css';
+@import '@fontsource/noto-kufi-arabic/500.css';
+@import '@fontsource/noto-kufi-arabic/700.css';
+@import '@fontsource/noto-naskh-arabic/400.css';
+@import '@fontsource/noto-naskh-arabic/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 14%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 17%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 17%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 14%;
+    --secondary: 0 0% 22%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 22%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 26%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 50.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 28%;
+    --input: 0 0% 22%;
+    --ring: 0 0% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Noto Kufi Arabic', 'Inter', sans-serif;
+  }
+  button, [role="button"], .btn {
+    font-family: 'Noto Kufi Arabic', 'Inter', sans-serif !important;
+  }
+}
+
+/* Date Input Calendar Icon Styling */
+input[type="date"] {
+  position: relative;
+  color-scheme: light;
+  display: flex;
+  align-items: center;
+}
+
+.dark input[type="date"] {
+  color-scheme: dark;
+}
+
+/* Calendar icon - positioned on the right (default for date inputs) */
+input[type="date"]:not(.footer-date-input)::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+  padding: 4px;
+  margin-left: auto;
+  order: 2;
+}
+
+/* Make calendar icon white in dark mode */
+.dark input[type="date"]:not(.footer-date-input)::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.2);
+}
+
+/* Footer date input: hide native icon (we use custom Calendar icon inside) */
+.footer-date-input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  height: 100%;
+  width: 2.5rem;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Date text - positioned on the left */
+input[type="date"]::-webkit-datetime-edit {
+  order: 1;
+  flex: 1;
+  text-align: left;
+}
+
+/* Ensure all date parts inherit proper color */
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  color: inherit;
+}
+
+/* Fix text color in dark mode */
+.dark input[type="date"]::-webkit-datetime-edit-text,
+.dark input[type="date"]::-webkit-datetime-edit-month-field,
+.dark input[type="date"]::-webkit-datetime-edit-day-field,
+.dark input[type="date"]::-webkit-datetime-edit-year-field {
+  color: hsl(0 0% 98%);
+}
+
+
+/* Search Highlight Styles */
+mark.search-highlight {
+  background-color: #fde047;
+  color: #422006;
+  padding: 0 2px;
+  border-radius: 2px;
+  transition: all 0.15s ease;
+}
+
+mark.search-highlight-current {
+  background-color: #fb923c;
+  color: #431407;
+  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.5);
+}
+
+/* CV Template Font Family - force override inherited font from app root */
+.cv-template {
+  font-family: var(--cv-font-family) !important;
+}
+.cv-template * {
+  font-family: inherit !important;
+}
+
+/* CV Template Typography Scaling - converts rem to em so font-size on root scales everything */
+.cv-template .text-\[10px\] { font-size: 0.625em !important; }
+.cv-template .text-\[9px\] { font-size: 0.5625em !important; }
+.cv-template .text-xs { font-size: 0.75em !important; line-height: 1.25em !important; }
+.cv-template .text-sm { font-size: 0.875em !important; line-height: 1.375em !important; }
+.cv-template .text-base { font-size: 1em !important; line-height: 1.5em !important; }
+.cv-template .text-lg { font-size: 1.125em !important; line-height: 1.625em !important; }
+.cv-template .text-xl { font-size: 1.25em !important; line-height: 1.75em !important; }
+.cv-template .text-2xl { font-size: 1.5em !important; line-height: 2em !important; }
+.cv-template .text-3xl { font-size: 1.875em !important; line-height: 2.25em !important; }
+.cv-template .text-4xl { font-size: 2.25em !important; line-height: 2.5em !important; }
+
+/* RTL: remove letter-spacing that disconnects Arabic/Kurdish script */
+.cv-template[dir="rtl"],
+.cv-template[dir="rtl"] * {
+  letter-spacing: 0 !important;
+}
+
+/* CV spacing variants */
+.cv-template.cv-spacing-compact { line-height: 1.3; }
+.cv-template.cv-spacing-compact .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.15rem; }
+.cv-template.cv-spacing-compact .space-y-1\.5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.25rem; }
+.cv-template.cv-spacing-compact .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.35rem; }
+.cv-template.cv-spacing-compact .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem; }
+.cv-template.cv-spacing-compact .space-y-3\.5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.6rem; }
+.cv-template.cv-spacing-compact .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.65rem; }
+.cv-template.cv-spacing-compact .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
+.cv-template.cv-spacing-compact .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.85rem; }
+.cv-template.cv-spacing-compact .mb-1 { margin-bottom: 0.1rem; }
+.cv-template.cv-spacing-compact .mb-2 { margin-bottom: 0.25rem; }
+.cv-template.cv-spacing-compact .mb-3 { margin-bottom: 0.4rem; }
+.cv-template.cv-spacing-compact .mb-4 { margin-bottom: 0.5rem; }
+.cv-template.cv-spacing-compact .mb-5 { margin-bottom: 0.6rem; }
+.cv-template.cv-spacing-compact .mb-6 { margin-bottom: 0.75rem; }
+.cv-template.cv-spacing-compact .mb-8 { margin-bottom: 1rem; }
+.cv-template.cv-spacing-compact .p-6 { padding: 1rem; }
+.cv-template.cv-spacing-compact .p-8 { padding: 1.25rem; }
+.cv-template.cv-spacing-compact .p-10 { padding: 1.5rem; }
+.cv-template.cv-spacing-compact .p-12 { padding: 1.75rem; }
+.cv-template.cv-spacing-compact .gap-3 { gap: 0.5rem; }
+.cv-template.cv-spacing-compact .gap-4 { gap: 0.6rem; }
+.cv-template.cv-spacing-compact .gap-6 { gap: 0.75rem; }
+.cv-template.cv-spacing-compact .gap-8 { gap: 1rem; }
+
+.cv-template.cv-spacing-relaxed { line-height: 1.8; }
+.cv-template.cv-spacing-relaxed .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.4rem; }
+.cv-template.cv-spacing-relaxed .space-y-1\.5 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.55rem; }
+.cv-template.cv-spacing-relaxed .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.7rem; }
+.cv-template.cv-spacing-relaxed .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
+.cv-template.cv-spacing-relaxed .space-y-3\.5 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.15rem; }
+.cv-template.cv-spacing-relaxed .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.35rem; }
+.cv-template.cv-spacing-relaxed .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.65rem; }
+.cv-template.cv-spacing-relaxed .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 2rem; }
+.cv-template.cv-spacing-relaxed .mb-1 { margin-bottom: 0.35rem; }
+.cv-template.cv-spacing-relaxed .mb-2 { margin-bottom: 0.65rem; }
+.cv-template.cv-spacing-relaxed .mb-3 { margin-bottom: 1rem; }
+.cv-template.cv-spacing-relaxed .mb-4 { margin-bottom: 1.35rem; }
+.cv-template.cv-spacing-relaxed .mb-5 { margin-bottom: 1.65rem; }
+.cv-template.cv-spacing-relaxed .mb-6 { margin-bottom: 2rem; }
+.cv-template.cv-spacing-relaxed .mb-8 { margin-bottom: 2.65rem; }
+.cv-template.cv-spacing-relaxed .p-6 { padding: 1.75rem; }
+.cv-template.cv-spacing-relaxed .p-8 { padding: 2.25rem; }
+.cv-template.cv-spacing-relaxed .p-10 { padding: 2.75rem; }
+.cv-template.cv-spacing-relaxed .p-12 { padding: 3.5rem; }
+.cv-template.cv-spacing-relaxed .gap-3 { gap: 1rem; }
+.cv-template.cv-spacing-relaxed .gap-4 { gap: 1.25rem; }
+.cv-template.cv-spacing-relaxed .gap-6 { gap: 1.75rem; }
+.cv-template.cv-spacing-relaxed .gap-8 { gap: 2.25rem; }
+
+@media print {
+  mark.search-highlight,
+  mark.search-highlight-current {
+    background-color: transparent !important;
+    color: inherit !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  /* Prevent extra blank page */
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-scale-container {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* Remove any extra spacing that causes blank pages */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  /* Resume print: only print the A4 paper, hide background */
+  .paper-canvas {
+    background-color: white !important;
+    background-image: none !important;
+  }
+
+  #resume-print-area {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    outline: none !important;
+  }
+}

@@ -1,0 +1,631 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Photo Printer Pro - Untitled</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./favicon.svg" />
+    
+    <!-- All fonts and libraries are now bundled locally via npm packages -->
+
+    <style>
+      /* ========================================
+         SHADCN CSS VARIABLES - ZINC PROFESSIONAL THEME
+         ======================================== */
+      :root {
+        --background: 0 0% 100%;
+        --foreground: 240 10% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 240 10% 3.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 240 10% 3.9%;
+        --primary: 240 5.9% 10%;
+        --primary-foreground: 0 0% 98%;
+        --secondary: 240 4.8% 95.9%;
+        --secondary-foreground: 240 5.9% 10%;
+        --muted: 240 4.8% 95.9%;
+        --muted-foreground: 240 3.8% 46.1%;
+        --accent: 240 4.8% 95.9%;
+        --accent-foreground: 240 5.9% 10%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 5.9% 90%;
+        --input: 240 5.9% 90%;
+        --ring: 240 5.9% 10%;
+        --radius: 0.5rem;
+      }
+
+      .dark {
+        --background: 0 0% 14%;
+        --foreground: 0 0% 98%;
+        --card: 0 0% 17%;
+        --card-foreground: 0 0% 98%;
+        --popover: 0 0% 17%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 0 0% 98%;
+        --primary-foreground: 0 0% 14%;
+        --secondary: 0 0% 22%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 0 0% 22%;
+        --muted-foreground: 0 0% 60%;
+        --accent: 0 0% 26%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 62.8% 50.6%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 0 0% 28%;
+        --input: 0 0% 22%;
+        --ring: 0 0% 50%;
+      }
+
+      /* ========================================
+         KURDISH FONT SUPPORT - UI ONLY (not paper)
+         ======================================== */
+      .font-kufi {
+        font-family: 'Noto Kufi Arabic', sans-serif;
+      }
+      
+      /* Paper content uses defaultFontFamily from settings, not forced Kurdish font */
+
+      /* ========================================
+         SMOOTH TRANSITIONS FOR THEME CHANGES
+         ======================================== */
+      html {
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+      
+      body, 
+      header, 
+      aside, 
+      main,
+      button,
+      input,
+      select,
+      textarea,
+      .btn-glass {
+        transition: background-color 0.2s ease, 
+                    border-color 0.2s ease, 
+                    color 0.2s ease,
+                    box-shadow 0.2s ease;
+      }
+
+      /* Performance hints for animated elements */
+      .animate-fade-in,
+      .animate-slide-up {
+        will-change: opacity, transform;
+      }
+
+      /* ========================================
+         PAPER STYLES - ALWAYS WHITE
+         ======================================== */
+      .a4-page, .a4-page-landscape {
+        background-color: white !important;
+        color: #111827 !important;
+        box-shadow: 
+          0 4px 6px -1px rgb(0 0 0 / 0.1),
+          0 10px 15px -3px rgb(0 0 0 / 0.1),
+          0 20px 25px -5px rgb(0 0 0 / 0.05);
+        flex-shrink: 0;
+        border: 1px solid #d4d4d8;
+      }
+
+      .a4-page {
+        width: 210mm;
+        height: 297mm;
+      }
+
+      .a4-page-landscape {
+        width: 297mm;
+        height: 210mm;
+      }
+
+      /* Force all children inside a4-page to ignore dark mode */
+      .a4-page *, .a4-page-landscape * {
+        color: inherit;
+      }
+
+      /* Ensure paper backgrounds stay white in dark mode */
+      .dark .a4-page,
+      .dark .a4-page-landscape {
+        background-color: white !important;
+        color: #111827 !important;
+        box-shadow: 
+          0 4px 6px -1px rgb(0 0 0 / 0.3),
+          0 10px 15px -3px rgb(0 0 0 / 0.3),
+          0 20px 25px -5px rgb(0 0 0 / 0.2);
+        border: 1px solid #52525b;
+      }
+
+      .dark .a4-page *,
+      .dark .a4-page-landscape * {
+        color: inherit;
+      }
+
+      /* ========================================
+         FORCE LIGHT MODE INSIDE PAPER (DARK MODE OVERRIDE)
+         ======================================== */
+      .dark .a4-page,
+      .dark .a4-page-landscape {
+        --background: 0 0% 100%;
+        --foreground: 240 10% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 240 10% 3.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 240 10% 3.9%;
+        --primary: 240 5.9% 10%;
+        --primary-foreground: 0 0% 98%;
+        --secondary: 240 4.8% 95.9%;
+        --secondary-foreground: 240 5.9% 10%;
+        --muted: 240 4.8% 95.9%;
+        --muted-foreground: 240 3.8% 46.1%;
+        --accent: 240 4.8% 95.9%;
+        --accent-foreground: 240 5.9% 10%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 5.9% 90%;
+        --input: 240 5.9% 90%;
+        --ring: 240 5.9% 10%;
+      }
+
+      /* Force specific elements inside paper to use light colors */
+      .dark .a4-page .bg-background,
+      .dark .a4-page-landscape .bg-background {
+        background-color: white !important;
+      }
+
+      .dark .a4-page .bg-card,
+      .dark .a4-page-landscape .bg-card {
+        background-color: white !important;
+      }
+
+      .dark .a4-page .bg-muted,
+      .dark .a4-page-landscape .bg-muted {
+        background-color: #f4f4f5 !important;
+      }
+
+      .dark .a4-page .bg-secondary,
+      .dark .a4-page-landscape .bg-secondary {
+        background-color: #f4f4f5 !important;
+      }
+
+      .dark .a4-page .bg-accent,
+      .dark .a4-page-landscape .bg-accent {
+        background-color: #f4f4f5 !important;
+      }
+
+      .dark .a4-page .text-foreground,
+      .dark .a4-page-landscape .text-foreground {
+        color: #18181b !important;
+      }
+
+      .dark .a4-page .text-muted-foreground,
+      .dark .a4-page-landscape .text-muted-foreground {
+        color: #71717a !important;
+      }
+
+      .dark .a4-page .text-secondary-foreground,
+      .dark .a4-page-landscape .text-secondary-foreground {
+        color: #18181b !important;
+      }
+
+      .dark .a4-page .border-border,
+      .dark .a4-page-landscape .border-border {
+        border-color: #e4e4e7 !important;
+      }
+
+      .dark .a4-page .hover\:bg-muted:hover,
+      .dark .a4-page-landscape .hover\:bg-muted:hover {
+        background-color: #f4f4f5 !important;
+      }
+
+      .dark .a4-page .hover\:bg-accent:hover,
+      .dark .a4-page-landscape .hover\:bg-accent:hover {
+        background-color: #f4f4f5 !important;
+      }
+
+      .dark .a4-page .hover\:text-foreground:hover,
+      .dark .a4-page-landscape .hover\:text-foreground:hover {
+        color: #18181b !important;
+      }
+
+      .dark .a4-page .hover\:text-destructive:hover,
+      .dark .a4-page-landscape .hover\:text-destructive:hover {
+        color: #dc2626 !important;
+      }
+
+      .dark .a4-page .bg-background\/95,
+      .dark .a4-page-landscape .bg-background\/95 {
+        background-color: rgba(255, 255, 255, 0.95) !important;
+      }
+
+      .dark .a4-page .backdrop-blur-sm,
+      .dark .a4-page-landscape .backdrop-blur-sm {
+        backdrop-filter: blur(4px);
+      }
+
+      /* Force hover border effect for empty slots in dark mode */
+      .dark .a4-page .hover\:border-muted-foreground\/50:hover,
+      .dark .a4-page-landscape .hover\:border-muted-foreground\/50:hover {
+        border-color: rgba(113, 113, 122, 0.5) !important;
+      }
+
+      .dark .a4-page .border-muted-foreground\/20,
+      .dark .a4-page-landscape .border-muted-foreground\/20 {
+        border-color: rgba(113, 113, 122, 0.2) !important;
+      }
+
+      /* ========================================
+         CANVAS BACKGROUND FOR PAPER AREA
+         ======================================== */
+      .paper-canvas {
+        background-color: #a1a1aa;
+        background-image: 
+          linear-gradient(#8b8b94 1px, transparent 1px),
+          linear-gradient(90deg, #8b8b94 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+
+      .dark .paper-canvas {
+        background-color: #27272a;
+        background-image: 
+          linear-gradient(#3f3f46 1px, transparent 1px),
+          linear-gradient(90deg, #3f3f46 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+
+      /* ========================================
+         PRINT STYLES
+         ======================================== */
+      @media print {
+        @page { 
+          margin: 0; 
+          size: A4; 
+        }
+        
+        body { 
+          margin: 0 !important; 
+          padding: 0 !important;
+          -webkit-print-color-adjust: exact !important; 
+          print-color-adjust: exact !important;
+          background: white !important; 
+        }
+
+        #root, 
+        main, 
+        .print-scale-container, 
+        #root > div {
+          padding: 0 !important;
+          margin: 0 !important;
+          display: block !important;
+          width: 100% !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          transform: none !important;
+          position: static !important;
+        }
+
+        /* Hide all non-print elements */
+        .no-print { 
+          display: none !important; 
+          visibility: hidden !important;
+          opacity: 0 !important;
+          height: 0 !important;
+          width: 0 !important;
+          overflow: hidden !important;
+        }
+        
+        .print-only { 
+          display: block !important; 
+        }
+
+        /* Hide ALL hover effects during print - force hide regardless of hover state */
+        .a4-page *:hover,
+        .a4-page-landscape *:hover,
+        .a4-page .group:hover *,
+        .a4-page-landscape .group:hover *,
+        [class*="group-hover\:opacity-100"],
+        [class*="group-hover\/trigger\:opacity-100"],
+        [class*="group-hover\/empty\:opacity-100"],
+        [class*="hover\:opacity-100"] {
+          opacity: inherit !important;
+        }
+
+        /* Force hide all hover toolbars and controls in print */
+        .a4-page [class*="no-print"],
+        .a4-page-landscape [class*="no-print"] {
+          display: none !important;
+          visibility: hidden !important;
+        }
+
+        /* Specifically hide photo slot hover controls - even when hovered */
+        .a4-page [class*="opacity-0"],
+        .a4-page-landscape [class*="opacity-0"],
+        .a4-page .group:hover [class*="opacity-0"],
+        .a4-page-landscape .group:hover [class*="opacity-0"] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+        }
+
+        /* Disable ALL hover effects during print - including border changes */
+        .a4-page .group:hover,
+        .a4-page-landscape .group:hover,
+        .a4-page *:hover,
+        .a4-page-landscape *:hover {
+          border-color: inherit !important;
+          background-color: inherit !important;
+          color: inherit !important;
+          box-shadow: inherit !important;
+        }
+
+        /* Force border-dashed slots to keep original border color during print */
+        .a4-page .border-dashed,
+        .a4-page-landscape .border-dashed,
+        .a4-page .border-dashed:hover,
+        .a4-page-landscape .border-dashed:hover {
+          border-color: rgba(113, 113, 122, 0.4) !important;
+        }
+
+        /* Force gray borders to stay gray during print (for businesscard, idphoto, invoice) */
+        .a4-page .border-gray-100,
+        .a4-page-landscape .border-gray-100,
+        .a4-page .border-gray-100:hover,
+        .a4-page-landscape .border-gray-100:hover {
+          border-color: rgb(243, 244, 246) !important;
+        }
+
+        .a4-page .border-gray-200,
+        .a4-page-landscape .border-gray-200,
+        .a4-page .border-gray-200:hover,
+        .a4-page-landscape .border-gray-200:hover {
+          border-color: rgb(229, 231, 235) !important;
+        }
+
+        /* ID Photo: Hide ALL borders and lines when printing */
+        .a4-page.idphoto-page .border-gray-100,
+        .a4-page.idphoto-page .border-gray-200,
+        .a4-page.idphoto-page .border,
+        .a4-page.idphoto-page [class*="border-"] {
+          border-color: transparent !important;
+          border: none !important;
+        }
+        
+        .a4-page.idphoto-page .grid > div {
+          border: none !important;
+        }
+
+        /* Force border-border to stay consistent during print */
+        .a4-page .border-border,
+        .a4-page-landscape .border-border,
+        .a4-page .border-border:hover,
+        .a4-page-landscape .border-border:hover {
+          border-color: rgb(229, 231, 235) !important;
+        }
+        
+        /* Paper dimensions - DO NOT MODIFY */
+        .a4-page, .a4-page-landscape {
+          margin: 0 !important;
+          box-shadow: none !important;
+          border: none !important;
+          transform: none !important;
+          background: white !important;
+          color: black !important;
+          position: relative !important;
+          left: 0 !important;
+          top: 0 !important;
+          display: block !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        /* Only add page break between pages, not after the last one */
+        .a4-page:not(:last-child), .a4-page-landscape:not(:last-child) {
+          page-break-after: always !important;
+          break-after: page !important;
+        }
+
+        /* Preserve paper padding - these are intentionally kept */
+        .a4-page {
+          width: 210mm !important;
+          height: 297mm !important;
+        }
+
+        .a4-page-landscape {
+          width: 297mm !important;
+          height: 210mm !important;
+        }
+
+        /* Allow inline styles for badges and colors */
+        .a4-page *, .a4-page-landscape * {
+          background-color: transparent;
+        }
+
+        /* Preserve colored elements */
+        .print-preserve-color {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        
+        [style*="background-color"] {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          background-color: inherit;
+        }
+        
+        [style*="color"] {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color: inherit;
+        }
+
+        /* Remove ring effects during print */
+        .ring-1, .ring-2, .ring-4 {
+          box-shadow: none !important;
+        }
+      }
+      
+      /* ========================================
+         CUSTOM SCROLLBAR
+         ======================================== */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: hsl(var(--border));
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: hsl(var(--muted-foreground));
+      }
+      
+      /* ========================================
+         DOT PATTERN BACKGROUND
+         ======================================== */
+      .bg-dot-pattern {
+        background-color: hsl(var(--background));
+        background-image: radial-gradient(hsl(var(--border)) 1px, transparent 1px);
+        background-size: 16px 16px;
+      }
+
+      /* ========================================
+         UTILITY CLASSES
+         ======================================== */
+      .input-modern {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        background-color: hsl(var(--card));
+        border: 1px solid hsl(var(--border));
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        color: hsl(var(--foreground));
+        outline: none;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      }
+      .input-modern:focus {
+        border-color: hsl(var(--primary));
+        box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+      }
+      
+      .toggle-switch {
+        appearance: none;
+        width: 40px;
+        height: 22px;
+        background: hsl(var(--muted));
+        border-radius: 20px;
+        position: relative;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+      .toggle-switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 18px;
+        height: 18px;
+        background: hsl(var(--card));
+        border-radius: 50%;
+        transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      }
+      .toggle-switch:checked {
+        background: hsl(var(--primary));
+      }
+      .toggle-switch:checked::after {
+        transform: translateX(18px);
+      }
+      
+      .btn-glass {
+        backdrop-filter: blur(8px);
+        background-color: hsl(var(--card) / 0.8);
+        border: 1px solid hsl(var(--border) / 0.5);
+        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        transition: all 0.2s ease;
+      }
+      .btn-glass:hover {
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      }
+
+      /* ========================================
+         DARK MODE COLOR CONSISTENCY
+         ======================================== */
+      .dark input,
+      .dark select,
+      .dark textarea {
+        background-color: hsl(var(--card));
+        border-color: hsl(var(--border));
+        color: hsl(var(--foreground));
+      }
+
+      .dark input:focus,
+      .dark select:focus,
+      .dark textarea:focus {
+        border-color: hsl(var(--primary));
+      }
+
+      .dark input::placeholder,
+      .dark textarea::placeholder {
+        color: hsl(var(--muted-foreground));
+      }
+
+      /* Base styles */
+      * {
+        border-color: hsl(var(--border));
+      }
+    </style>
+<link rel="stylesheet" href="/index.css">
+    <!-- Apply theme BEFORE React loads to prevent flash -->
+    <script>
+      (function() {
+        try {
+          // Check localStorage first
+          var theme = localStorage.getItem('photoPrinterTheme');
+          var language = localStorage.getItem('photoPrinterLanguage');
+          
+          // Apply theme immediately
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+          }
+          
+          // Apply RTL direction for Kurdish/Arabic
+          if (language === 'ku' || language === 'ar') {
+            document.documentElement.dir = 'rtl';
+          }
+        } catch (e) {
+          // Silent fail - React will handle it
+        }
+      })();
+    </script>
+</head>
+  <body class="bg-background text-foreground antialiased font-sans">
+    <div id="root"></div>
+    <!-- Polyfill for face-api.js in Electron -->
+    <script>
+      if (typeof window !== 'undefined' && !window.TextEncoder) {
+        window.TextEncoder = class TextEncoder {
+          encode(str) {
+            const arr = new Uint8Array(str.length);
+            for (let i = 0; i < str.length; i++) arr[i] = str.charCodeAt(i);
+            return arr;
+          }
+        };
+      }
+      if (typeof window !== 'undefined' && !window.TextDecoder) {
+        window.TextDecoder = class TextDecoder {
+          decode(arr) {
+            return String.fromCharCode.apply(null, arr);
+          }
+        };
+      }
+    </script>
+    <!-- Standard Vite entry point -->
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

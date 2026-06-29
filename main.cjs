@@ -1,9 +1,59 @@
-const { app, BrowserWindow, ipcMain, dialog, screen, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 const crypto = require('crypto');
 const https = require('https');
+const TrialManager = require('./trial-manager.cjs');
+
+// ============================================
+// TRIAL SYSTEM INSTANCE
+// ============================================
+const trialManager = new TrialManager();
+let cachedTrialStatus = null;
+
+// Register custom protocol BEFORE app.ready — required by Electron
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'pppro',
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
+}]);
+
+// ============================================
+// NATIVE LICENSE PROTECTION MODULE (C++ addon)
+// MANDATORY in production - prevents ASAR unpack/modify/repack attacks
+// The .node binary verifies main.cjs content and ASAR integrity
+// ============================================
+let nativeLicense = null;
+try {
+  nativeLicense = require('./native/index.cjs');
+  if (nativeLicense.isAvailable()) {
+    console.log(`[NativeProtection] Loaded v${nativeLicense.getModuleVersion()}`);
+    
+    // In packaged app: verify ASAR hasn't been extracted alongside app.asar
+    // Note: main.cjs self-integrity check is no longer needed because main.cjs
+    // is now encrypted (main.enc) and can only be decrypted by the .node binary
+    if (app.isPackaged) {
+      const asarOk = nativeLicense.verifyAsarIntegrity(process.resourcesPath);
+      if (!asarOk) {
+        dialog.showErrorBox('Security Error', 'Application integrity check failed. The application files have been tampered with. Please reinstall from the official source.');
+        app.exit(1);
+      }
+    }
+  } else if (app.isPackaged) {
+    // Production build MUST have native module compiled
+    dialog.showErrorBox('Security Error', 'Required security module is missing. Please reinstall from the official source.');
+    app.exit(1);
+  } else {
+    console.warn('[NativeProtection] Module not compiled. Run: npm run build:native');
+  }
+} catch (err) {
+  if (app.isPackaged) {
+    dialog.showErrorBox('Security Error', 'Required security module failed to load. Please reinstall from the official source.');
+    app.exit(1);
+  } else {
+    console.warn('[NativeProtection] Could not load native module:', err.message);
+  }
+}
 
 // Enable SharedArrayBuffer for WASM threading
 app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
@@ -55,10 +105,10 @@ const LICENSE_API_URL = 'https://pppro-api.azhersallah1.workers.dev';
 const LICENSE_WS_URL = 'wss://pppro-api.azhersallah1.workers.dev/ws';
 const LICENSE_FILE_NAME = 'license.dat';
 
-// WebSocket connection for real-time status
+// WebSocket connection removed
 let wsConnection = null;
 let wsReconnectTimer = null;
-const WS_RECONNECT_DELAY = 5000;
+
 
 // Get license file path
 function getLicenseFilePath() {
@@ -121,11 +171,11 @@ function loadLicenseFromFile(machineId) {
   try {
     const licensePath = getLicenseFilePath();
     if (!fs.existsSync(licensePath)) return null;
-    
+
     const encrypted = fs.readFileSync(licensePath, 'utf8');
     const data = decryptLicenseData(encrypted, machineId);
     if (!data) return null;
-    
+
     // Verify checksum
     const { checksum, ...rest } = data;
     const expectedChecksum = generateChecksum(rest, machineId);
@@ -133,13 +183,13 @@ function loadLicenseFromFile(machineId) {
       console.error('License checksum mismatch');
       return null;
     }
-    
+
     // Verify machine ID
     if (data.machineId !== machineId) {
       console.error('License machine ID mismatch');
       return null;
     }
-    
+
     return data;
   } catch (err) {
     console.error('Failed to load license:', err);
@@ -171,7 +221,7 @@ function apiCall(action, machineId, token = null, appVersion = null) {
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify({ action, machineId, token, appVersion });
     const url = new URL(LICENSE_API_URL);
-    
+
     const options = {
       hostname: url.hostname,
       port: 443,
@@ -203,6 +253,7 @@ function apiCall(action, machineId, token = null, appVersion = null) {
 }
 
 // Main license check function
+// Main license check function
 async function checkLicenseSecure(machineId) {
   if (!machineId) {
     return { activated: false, source: 'offline', error: 'No machine ID' };
@@ -211,37 +262,35 @@ async function checkLicenseSecure(machineId) {
   const storedLicense = loadLicenseFromFile(machineId);
   const appVersion = app.getVersion();
 
-  // Try online verification
+  // Try online verification ONCE on startup
+  // This updates "last active" on server and checks for deactivation
   try {
-    if (storedLicense && storedLicense.token) {
-      // Have existing token - try to refresh
-      const result = await apiCall('refresh', machineId, storedLicense.token, appVersion);
-      
-      if (result.revoked) {
-        deleteLicenseFile();
-        return { activated: false, source: 'online', error: 'License revoked' };
-      }
-      
-      if (result.activated && result.token) {
-        saveLicenseToFile(result.token, machineId);
-        return { activated: true, source: 'online', machineId };
-      }
-    } else {
-      // First activation - must be online
-      const result = await apiCall('verify', machineId, null, appVersion);
-      
-      if (result.activated && result.token) {
-        saveLicenseToFile(result.token, machineId);
-        return { activated: true, source: 'online', machineId };
-      }
-      
-      return { activated: false, source: 'online', machineId };
+    const token = storedLicense ? storedLicense.token : null;
+    // Always call verify/refresh to update server state
+    const action = token ? 'refresh' : 'verify';
+
+    // Set a short timeout for the check so we don't block startup too long if offline
+    // apiCall helper already has a timeout, but we rely on it here
+    const result = await apiCall(action, machineId, token, appVersion);
+
+    // 1. License explicitly revoked/deactivated on server
+    if (result.revoked || result.activated === false) {
+      console.log('License deactivated by server');
+      deleteLicenseFile();
+      return { activated: false, source: 'online', error: 'License deactivated' };
+    }
+
+    // 2. Verified/Activated successfully
+    if (result.activated && result.token) {
+      saveLicenseToFile(result.token, machineId);
+      return { activated: true, source: 'online', machineId };
     }
   } catch (err) {
-    console.log('Online verification failed:', err.message);
+    console.log('Online check failed (offline mode):', err.message);
+    // Continue to offline fallback
   }
 
-  // Offline fallback - works forever after first activation
+  // Offline fallback - works if we have a valid stored license
   if (storedLicense && storedLicense.token) {
     if (isTokenValid(storedLicense.token)) {
       return { activated: true, source: 'offline', machineId };
@@ -261,53 +310,60 @@ async function checkLicenseSecure(machineId) {
 function getHardwareMachineId() {
   try {
     let machineId = '';
-    
+
     if (process.platform === 'win32') {
+      // Method 1: Motherboard serial (original order — matches existing licenses)
       try {
-        const mbSerial = execSync('powershell -command "(Get-WmiObject Win32_BaseBoard).SerialNumber"', { encoding: 'utf8', windowsHide: true });
+        const mbSerial = execSync('powershell -NoProfile -command "(Get-WmiObject Win32_BaseBoard).SerialNumber"', { encoding: 'utf8', windowsHide: true, timeout: 10000 });
         const mbMatch = mbSerial.trim();
         if (mbMatch && mbMatch !== 'To be filled by O.E.M.' && mbMatch !== 'Default string' && mbMatch.length > 3) {
           machineId = mbMatch;
         }
       } catch (e) {
         try {
-          const mbSerial = execSync('wmic baseboard get serialnumber', { encoding: 'utf8' });
+          const mbSerial = execSync('wmic baseboard get serialnumber', { encoding: 'utf8', windowsHide: true, timeout: 10000 });
           const mbMatch = mbSerial.split('\n')[1]?.trim();
           if (mbMatch && mbMatch !== 'To be filled by O.E.M.' && mbMatch.length > 3) {
             machineId = mbMatch;
           }
-        } catch (e2) {}
+        } catch (e2) { }
       }
-      
+
+      // Method 2: BIOS serial
       if (!machineId) {
         try {
-          const biosSerial = execSync('powershell -command "(Get-WmiObject Win32_BIOS).SerialNumber"', { encoding: 'utf8', windowsHide: true });
+          const biosSerial = execSync('powershell -NoProfile -command "(Get-WmiObject Win32_BIOS).SerialNumber"', { encoding: 'utf8', windowsHide: true, timeout: 10000 });
           const biosMatch = biosSerial.trim();
           if (biosMatch && biosMatch !== 'To be filled by O.E.M.' && biosMatch !== 'Default string' && biosMatch.length > 3) {
             machineId = biosMatch;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
-      
+
+      // Method 3: CPU ID
       if (!machineId) {
         try {
-          const cpuId = execSync('powershell -command "(Get-WmiObject Win32_Processor).ProcessorId"', { encoding: 'utf8', windowsHide: true });
+          const cpuId = execSync('powershell -NoProfile -command "(Get-WmiObject Win32_Processor).ProcessorId"', { encoding: 'utf8', windowsHide: true, timeout: 10000 });
           const cpuMatch = cpuId.trim();
           if (cpuMatch && cpuMatch.length > 3) machineId = cpuMatch;
-        } catch (e) {}
+        } catch (e) { }
       }
-      
+
+      // Method 4 (last fallback): Registry MachineGuid
       if (!machineId) {
         try {
-          const regResult = execSync('powershell -command "(Get-ItemProperty -Path \'HKLM:\\SOFTWARE\\Microsoft\\Cryptography\' -Name MachineGuid).MachineGuid"', { encoding: 'utf8', windowsHide: true });
-          machineId = regResult.trim();
-        } catch (e) {}
+          const regResult = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid', { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+          const match = regResult.match(/MachineGuid\s+REG_SZ\s+(.+)/);
+          if (match && match[1].trim().length > 3) {
+            machineId = match[1].trim();
+          }
+        } catch (e) { }
       }
     } else if (process.platform === 'darwin') {
       try {
         const result = execSync('system_profiler SPHardwareDataType | grep "Hardware UUID"', { encoding: 'utf8' });
         machineId = result.split(':')[1]?.trim() || '';
-      } catch (e) {}
+      } catch (e) { }
     } else {
       try {
         if (fs.existsSync('/sys/class/dmi/id/product_uuid')) {
@@ -315,13 +371,13 @@ function getHardwareMachineId() {
         } else if (fs.existsSync('/etc/machine-id')) {
           machineId = fs.readFileSync('/etc/machine-id', 'utf8').trim();
         }
-      } catch (e) {}
+      } catch (e) { }
     }
-    
+
     if (machineId) {
       machineId = machineId.replace(/\//g, '_').replace(/^[_\-\.]+/, '').replace(/[_\-\.]+$/, '').replace(/\s+/g, '');
     }
-    
+
     return machineId || null;
   } catch (err) {
     console.error('Failed to get hardware machine ID:', err);
@@ -340,7 +396,7 @@ function createWindow() {
 
   Menu.setApplicationMenu(null);
 
-  const iconPath = isDev 
+  const iconPath = isDev
     ? path.join(__dirname, 'build', 'icon.png')
     : path.join(process.resourcesPath, 'build', 'icon.png');
 
@@ -353,24 +409,24 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
-      devTools: false, // Disabled
+      devTools: false, // Disabled for production
+      webSecurity: false, // Allow external API calls (Hugging Face, etc.)
     },
   });
 
   // Block DevTools shortcuts in production
-  if (!isDev) {
-    mainWindow.webContents.on('before-input-event', (event, input) => {
-      if (input.key === 'F12') event.preventDefault();
-      if (input.control && input.shift && input.key.toLowerCase() === 'i') event.preventDefault();
-      if (input.control && input.shift && input.key.toLowerCase() === 'j') event.preventDefault();
-      if (input.control && input.key.toLowerCase() === 'u') event.preventDefault();
-    });
-  }
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12') event.preventDefault();
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') event.preventDefault();
+    if (input.control && input.shift && input.key.toLowerCase() === 'j') event.preventDefault();
+    if (input.control && input.key.toLowerCase() === 'u') event.preventDefault();
+  });
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000');
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    // All dist files served through encrypted pppro:// protocol
+    mainWindow.loadURL('pppro://app/index.html');
   }
 
   mainWindow.maximize();
@@ -412,71 +468,20 @@ let lastNotifiedUpdateVersion = null;
 // WebSocket connection = online, disconnect = offline
 // Durable Objects handles connection persistence automatically
 
+let wsPingInterval = null; // Ping interval for keeping connection alive
+
 // Connect WebSocket for real-time online status
+// WebSocket functions removed
 function connectWebSocket(machineId) {
-  if (wsConnection && wsConnection.readyState === 1) return; // Already connected
-  
-  try {
-    const WebSocket = require('ws');
-    const wsUrl = `${LICENSE_WS_URL}?machineId=${encodeURIComponent(machineId)}&type=desktop`;
-    
-    wsConnection = new WebSocket(wsUrl);
-    
-    wsConnection.on('open', () => {
-      console.log('WebSocket connected - online status active');
-      if (wsReconnectTimer) {
-        clearTimeout(wsReconnectTimer);
-        wsReconnectTimer = null;
-      }
-    });
-    
-    wsConnection.on('message', (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        
-        // Handle license status changes from server
-        if (msg.type === 'license-activated') {
-          isLicenseValid = true;
-          lastKnownActivationState = true;
-          if (mainWindow && mainWindow.webContents) {
-            mainWindow.webContents.send('license-activated');
-          }
-        } else if (msg.type === 'license-revoked') {
-          isLicenseValid = false;
-          lastKnownActivationState = false;
-          deleteLicenseFile();
-          if (mainWindow && mainWindow.webContents) {
-            mainWindow.webContents.send('license-revoked');
-          }
-        }
-      } catch (e) {
-        console.log('WebSocket message parse error:', e);
-      }
-    });
-    
-    wsConnection.on('close', () => {
-      console.log('WebSocket disconnected');
-      wsConnection = null;
-      // Reconnect after delay
-      if (!wsReconnectTimer) {
-        wsReconnectTimer = setTimeout(() => {
-          wsReconnectTimer = null;
-          if (cachedMachineId) connectWebSocket(cachedMachineId);
-        }, WS_RECONNECT_DELAY);
-      }
-    });
-    
-    wsConnection.on('error', (err) => {
-      console.log('WebSocket error:', err.message);
-    });
-    
-  } catch (err) {
-    console.log('WebSocket connection failed:', err.message);
-  }
+  // Disabled
 }
 
 // Disconnect WebSocket
 function disconnectWebSocket() {
+  if (wsPingInterval) {
+    clearInterval(wsPingInterval);
+    wsPingInterval = null;
+  }
   if (wsReconnectTimer) {
     clearTimeout(wsReconnectTimer);
     wsReconnectTimer = null;
@@ -499,47 +504,44 @@ function requireLicense() {
 function startHeartbeat() {
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   if (updateCheckInterval) clearInterval(updateCheckInterval);
-  
-  // Connect WebSocket for real-time online status
-  if (cachedMachineId) {
-    connectWebSocket(cachedMachineId);
-  }
-  
-  // Check for app updates every 30 seconds
+
+  // WebSocket connection REMOVED
+
+  // Check for app updates every 5 minutes (reduced from 30 seconds)
   checkForAppUpdate();
-  updateCheckInterval = setInterval(checkForAppUpdate, 30000);
+  updateCheckInterval = setInterval(checkForAppUpdate, 300000); // 5 minutes
 }
 
 // Check for app updates from GitHub
 async function checkForAppUpdate() {
   if (!mainWindow || !mainWindow.webContents) return;
-  
+
   try {
     const release = await fetchLatestRelease();
     if (!release || !release.tag_name) return;
-    
+
     const latestVersion = release.tag_name.replace('v', '');
     const currentVersion = app.getVersion();
     const isNewer = latestVersion.localeCompare(currentVersion, undefined, { numeric: true }) > 0;
-    
+
     if (isNewer && latestVersion !== lastNotifiedUpdateVersion) {
       lastNotifiedUpdateVersion = latestVersion;
       console.log('New update available:', latestVersion);
-      
+
       mainWindow.webContents.send('server-update-notification', {
         title: 'نوێکردنەوەی نوێ',
         message: `وەشانی ${latestVersion} بەردەستە. تکایە بەرنامەکە نوێ بکەرەوە.`,
         version: latestVersion,
         forceUpdate: false
       });
-      
+
       mainWindow.webContents.send('update-status', {
         status: 'available',
         message: `نوێکردنەوەی نوێ بەردەستە: ${latestVersion}`,
         messageEn: `New update available: ${latestVersion}`,
         version: latestVersion
       });
-      
+
       latestReleaseInfo = release;
     }
   } catch (err) {
@@ -557,7 +559,7 @@ async function stopHeartbeat() {
     clearInterval(updateCheckInterval);
     updateCheckInterval = null;
   }
-  
+
   // Disconnect WebSocket (server will mark as offline automatically)
   disconnectWebSocket();
 }
@@ -589,21 +591,82 @@ ipcMain.on('user-activity', () => {
   // WebSocket connection handles online status automatically
 });
 
+// ============================================
+// TRIAL SYSTEM - IPC HANDLERS
+// ============================================
+
+// Check trial status (called from renderer before or alongside license check)
+ipcMain.handle('check-trial', () => {
+  cachedTrialStatus = trialManager.checkTrial();
+  return cachedTrialStatus;
+});
+
+// Get cached trial status without re-checking
+ipcMain.handle('get-trial-status', () => {
+  return cachedTrialStatus || trialManager.checkTrial();
+});
+
+// Start trial (called when user clicks "Try for 10 hours" button)
+ipcMain.handle('start-trial', () => {
+  const result = trialManager.startTrial();
+  cachedTrialStatus = result;
+  if (result.isValid) {
+    isLicenseValid = true;
+  }
+  return result;
+});
+
+/**
+ * Show trial expired dialog.
+ * Returns: 'enter-license' | 'purchase' | 'exit'
+ * Does NOT quit the app — lets the license manager handle activation.
+ */
+function showTrialExpiredDialog(tampered) {
+  const message = tampered
+    ? 'Cannot reset trial. Please purchase a license.'
+    : 'Trial expired. Please enter your license key or purchase the full version.';
+
+  const result = dialog.showMessageBoxSync(mainWindow, {
+    type: 'warning',
+    title: 'Photo Printer Pro - Trial Expired',
+    message: message,
+    buttons: ['Enter License', 'Purchase', 'Exit'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true
+  });
+
+  // 0 = Enter License, 1 = Purchase, 2 = Exit
+  if (result === 1) {
+    // Open purchase page in default browser
+    require('electron').shell.openExternal('https://photo-printer-pro.netlify.app/');
+    return 'purchase';
+  } else if (result === 2) {
+    return 'exit';
+  }
+  return 'enter-license';
+}
+
+// IPC handler to show the trial dialog from the renderer
+ipcMain.handle('show-trial-expired-dialog', (event, tampered) => {
+  return showTrialExpiredDialog(tampered === true);
+});
+
 // SECURE LICENSE CHECK
 ipcMain.handle('check-license', async () => {
   const machineId = getHardwareMachineId();
   cachedMachineId = machineId;
-  
+
   if (!machineId) {
     isLicenseValid = false;
     return { activated: false, machineId: null, error: 'Could not get machine ID' };
   }
-  
+
   // ASAR integrity check
   if (app.isPackaged) {
     const asarPath = path.join(process.resourcesPath, 'app.asar');
     const extractedPath = path.join(process.resourcesPath, 'app');
-    
+
     if (fs.existsSync(extractedPath) || !fs.existsSync(asarPath)) {
       isLicenseValid = false;
       dialog.showMessageBoxSync({
@@ -616,15 +679,70 @@ ipcMain.handle('check-license', async () => {
       return { activated: false, machineId, error: 'Integrity check failed' };
     }
   }
-  
+
+  // ---- NATIVE MODULE PROTECTION LAYER (additive) ----
+  // Cross-verify the machine ID from C++ to detect JS tampering
+  if (nativeLicense && nativeLicense.isAvailable()) {
+    try {
+      const nativeMachineIdMatch = nativeLicense.verifyMachineIdMatch(machineId);
+      if (!nativeMachineIdMatch) {
+        console.error('[NativeProtection] Machine ID mismatch between JS and native module');
+        isLicenseValid = false;
+        dialog.showMessageBoxSync({
+          type: 'error',
+          title: 'Security Error',
+          message: 'Hardware verification failed. Please reinstall the application.',
+          buttons: ['OK']
+        });
+        app.quit();
+        return { activated: false, machineId, error: 'Native integrity check failed' };
+      }
+    } catch (nativeErr) {
+      console.warn('[NativeProtection] Verification warning:', nativeErr.message);
+      // Don't block on native module errors - JS system continues independently
+    }
+  }
+  // ---- END NATIVE MODULE PROTECTION LAYER ----
+
   // Use secure license check
   const result = await checkLicenseSecure(machineId);
   isLicenseValid = result.activated;
   lastKnownActivationState = result.activated;
-  
+
+  // ---- NATIVE POST-VALIDATION (additive) ----
+  // After JS license check succeeds, also validate via native module
+  if (result.activated && nativeLicense && nativeLicense.isAvailable()) {
+    try {
+      const storedLicense = loadLicenseFromFile(machineId);
+      if (storedLicense && storedLicense.token) {
+        const nativeResult = nativeLicense.validateLicenseComplete(storedLicense.token, machineId);
+        if (nativeResult.nativeAvailable && !nativeResult.valid) {
+          console.error('[NativeProtection] Native validation rejected license:', nativeResult.error);
+          isLicenseValid = false;
+          return { activated: false, machineId, error: 'License validation failed (native)', source: 'native' };
+        }
+      }
+    } catch (nativeErr) {
+      console.warn('[NativeProtection] Post-validation warning:', nativeErr.message);
+      // Don't block on native module errors
+    }
+  }
+  // ---- END NATIVE POST-VALIDATION ----
+
   // Always start heartbeat (for tracking and live status updates)
   startHeartbeat();
-  
+
+  // ---- TRIAL SYSTEM INTEGRATION ----
+  // If license is not activated, check trial status and pass to renderer.
+  // The renderer ALWAYS shows the activation dialog when no license.
+  // User must click "Try" button each launch — that triggers start-trial IPC
+  // which sets isLicenseValid = true and lets the app run.
+  if (!result.activated) {
+    cachedTrialStatus = trialManager.checkTrial();
+    result.trial = cachedTrialStatus;
+  }
+  // ---- END TRIAL SYSTEM INTEGRATION ----
+
   return result;
 });
 
@@ -635,14 +753,59 @@ let pendingFileToOpen = null;
 ipcMain.handle('save-project', async (event, { content, filePath }) => {
   const licenseCheck = requireLicense();
   if (!licenseCheck.success) return licenseCheck;
-  
+
   try {
-    // Use async write for large files
-    await fs.promises.writeFile(filePath, content, 'utf-8');
+    // ATOMIC WRITE: Write to temp file first, then rename
+    // This prevents corruption if app crashes during write
+    const tempPath = filePath + '.tmp';
+    const backupPath = filePath + '.backup';
+    
+    // Write to temporary file first
+    await fs.promises.writeFile(tempPath, content, 'utf-8');
+    
+    // Create backup of existing file if it exists
+    if (fs.existsSync(filePath)) {
+      try {
+        await fs.promises.copyFile(filePath, backupPath);
+      } catch (backupErr) {
+        console.warn('Could not create backup:', backupErr);
+        // Continue anyway - better to save than fail
+      }
+    }
+    
+    // Atomically replace the old file with the new one
+    await fs.promises.rename(tempPath, filePath);
+    
+    // Delete backup after successful save (keep it for one save cycle)
+    if (fs.existsSync(backupPath)) {
+      try {
+        // Wait a bit before deleting backup to ensure file system sync
+        setTimeout(() => {
+          if (fs.existsSync(backupPath)) {
+            fs.unlinkSync(backupPath);
+          }
+        }, 1000);
+      } catch (cleanupErr) {
+        // Ignore cleanup errors
+      }
+    }
+    
     currentProjectPath = filePath;
     return { success: true, filePath };
   } catch (err) {
     console.error('Save project error:', err);
+    
+    // Try to restore from backup if save failed
+    const backupPath = filePath + '.backup';
+    if (fs.existsSync(backupPath)) {
+      try {
+        await fs.promises.copyFile(backupPath, filePath);
+        console.log('Restored from backup after save failure');
+      } catch (restoreErr) {
+        console.error('Could not restore from backup:', restoreErr);
+      }
+    }
+    
     return { success: false, error: err.message };
   }
 });
@@ -650,18 +813,25 @@ ipcMain.handle('save-project', async (event, { content, filePath }) => {
 ipcMain.handle('save-project-as', async (event, { content, defaultName }) => {
   const licenseCheck = requireLicense();
   if (!licenseCheck.success) return licenseCheck;
-  
+
   try {
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save Project As',
       defaultPath: defaultName || 'project.pppro',
       filters: [{ name: 'Photo Printer Pro Project', extensions: ['pppro'] }]
     });
-    
+
     if (result.canceled || !result.filePath) return { success: false, canceled: true };
+
+    // ATOMIC WRITE: Write to temp file first, then rename
+    const tempPath = result.filePath + '.tmp';
     
-    // Use async write for large files
-    await fs.promises.writeFile(result.filePath, content, 'utf-8');
+    // Write to temporary file first
+    await fs.promises.writeFile(tempPath, content, 'utf-8');
+    
+    // Atomically move temp file to final destination
+    await fs.promises.rename(tempPath, result.filePath);
+    
     currentProjectPath = result.filePath;
     return { success: true, filePath: result.filePath };
   } catch (err) {
@@ -677,18 +847,18 @@ ipcMain.handle('set-window-title', (event, title) => { if (mainWindow) mainWindo
 ipcMain.handle('open-project-dialog', async () => {
   const licenseCheck = requireLicense();
   if (!licenseCheck.success) return licenseCheck;
-  
+
   try {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Open Project',
       filters: [{ name: 'Photo Printer Pro Project', extensions: ['pppro'] }],
       properties: ['openFile']
     });
-    
+
     if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
       return { success: false, canceled: true };
     }
-    
+
     const filePath = result.filePaths[0];
     const content = fs.readFileSync(filePath, 'utf-8');
     currentProjectPath = filePath;
@@ -701,7 +871,7 @@ ipcMain.handle('open-project-dialog', async () => {
 ipcMain.handle('get-pending-file', () => {
   // Allow pending file only if licensed
   if (!isLicenseValid) return { success: false, noPendingFile: true };
-  
+
   if (pendingFileToOpen && fs.existsSync(pendingFileToOpen)) {
     try {
       const content = fs.readFileSync(pendingFileToOpen, 'utf-8');
@@ -778,7 +948,7 @@ async function downloadAsset(assetId, assetName, totalSize) {
     const tempDir = app.getPath('temp');
     const filePath = path.join(tempDir, assetName);
     const file = fs.createWriteStream(filePath, { highWaterMark: 1024 * 1024 });
-    
+
     let downloadedBytes = 0;
     let lastProgressUpdate = 0;
     let lastBytes = 0;
@@ -817,7 +987,7 @@ async function downloadAsset(assetId, assetName, totalSize) {
             speed = timeDiff > 0 ? bytesDiff / timeDiff : 0;
             lastTime = now; lastBytes = downloadedBytes; lastProgressUpdate = now;
             const percent = Math.round((downloadedBytes / totalSize) * 100);
-            
+
             if (mainWindow && mainWindow.webContents) {
               mainWindow.webContents.send('update-status', {
                 status: 'downloading', message: `داگرتن... ${percent}%`, messageEn: `Downloading... ${percent}%`,
@@ -827,10 +997,10 @@ async function downloadAsset(assetId, assetName, totalSize) {
           }
         });
         res.on('end', () => file.end(() => resolve(filePath)));
-        res.on('error', (err) => { file.close(); fs.unlink(filePath, () => {}); reject(err); });
+        res.on('error', (err) => { file.close(); fs.unlink(filePath, () => { }); reject(err); });
       });
       req.setTimeout(300000);
-      req.on('error', (err) => { file.close(); fs.unlink(filePath, () => {}); reject(err); });
+      req.on('error', (err) => { file.close(); fs.unlink(filePath, () => { }); reject(err); });
       req.end();
     };
     makeRequest(options);
@@ -845,11 +1015,11 @@ ipcMain.handle('check-for-updates', async () => {
 
     const release = await fetchLatestRelease();
     latestReleaseInfo = release;
-    
+
     const latestVersion = release.tag_name.replace('v', '');
     const currentVersion = app.getVersion();
     const isNewer = latestVersion.localeCompare(currentVersion, undefined, { numeric: true }) > 0;
-    
+
     if (isNewer) {
       if (mainWindow && mainWindow.webContents) {
         mainWindow.webContents.send('update-status', {
@@ -883,7 +1053,7 @@ ipcMain.handle('download-update', async () => {
     }
 
     downloadedFilePath = await downloadAsset(exeAsset.id, exeAsset.name, exeAsset.size);
-    
+
     if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.send('update-status', { status: 'downloaded', message: 'نوێکردنەوە ئامادەیە', messageEn: 'Update ready to install' });
     }
@@ -929,13 +1099,33 @@ ipcMain.handle('verify-license-state', async () => {
     isLicenseValid = false;
     return { valid: false };
   }
-  
+
   const storedLicense = loadLicenseFromFile(machineId);
   if (!storedLicense || !storedLicense.token || !isTokenValid(storedLicense.token)) {
     isLicenseValid = false;
     return { valid: false };
   }
-  
+
+  // ---- NATIVE RE-VERIFICATION (additive) ----
+  if (nativeLicense && nativeLicense.isAvailable()) {
+    try {
+      if (!nativeLicense.verifyMachineIdMatch(machineId)) {
+        isLicenseValid = false;
+        return { valid: false, error: 'native_hwid_mismatch' };
+      }
+      if (storedLicense && storedLicense.token) {
+        const nativeCheck = nativeLicense.validateLicenseComplete(storedLicense.token, machineId);
+        if (nativeCheck.nativeAvailable && !nativeCheck.valid) {
+          isLicenseValid = false;
+          return { valid: false, error: 'native_validation_failed' };
+        }
+      }
+    } catch (e) {
+      // Don't block on native module errors
+    }
+  }
+  // ---- END NATIVE RE-VERIFICATION ----
+
   isLicenseValid = true;
   return { valid: true };
 });
@@ -950,8 +1140,63 @@ app.on('open-file', (event, filePath) => {
   else fileToOpen = filePath;
 });
 
+// MIME type lookup for custom protocol
+function getProtocolMimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes = {
+    '.html': 'text/html', '.js': 'application/javascript', '.mjs': 'application/javascript',
+    '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+    '.ico': 'image/x-icon', '.webp': 'image/webp', '.woff': 'font/woff', '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf', '.otf': 'font/otf', '.wasm': 'application/wasm',
+    '.map': 'application/json', '.txt': 'text/plain',
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
+
 // Allow multiple instances of the app
 app.whenReady().then(() => {
+  // Register pppro:// protocol — decrypts encrypted assets, serves others directly
+  // Without the native .node binary, no JS/CSS/HTML can be decrypted = app is useless
+  if (!isDev) {
+    protocol.handle('pppro', async (request) => {
+      try {
+        const url = new URL(request.url);
+        let relPath = decodeURIComponent(url.pathname);
+        if (relPath.startsWith('/')) relPath = relPath.substring(1);
+        
+        // Build the file path inside dist/
+        let filePath = path.join(__dirname, 'dist', relPath);
+        
+        // Check for encrypted version (.enc) — requires native module to decrypt
+        let encPath = filePath + '.enc';
+        if (__dirname.includes('app.asar')) {
+          encPath = encPath.replace('app.asar', 'app.asar.unpacked');
+        }
+        
+        if (fs.existsSync(encPath) && nativeLicense && nativeLicense.isAvailable()) {
+          const decrypted = nativeLicense.decryptModule(encPath);
+          return new Response(decrypted, {
+            headers: { 'Content-Type': getProtocolMimeType(filePath) }
+          });
+        }
+        
+        // Non-encrypted files (images, fonts, wasm, etc.) — serve from ASAR
+        if (fs.existsSync(filePath)) {
+          const data = fs.readFileSync(filePath);
+          return new Response(data, {
+            headers: { 'Content-Type': getProtocolMimeType(filePath) }
+          });
+        }
+        
+        return new Response('Not found', { status: 404 });
+      } catch (e) {
+        console.error('[pppro protocol] Error:', e.message);
+        return new Response('Server error', { status: 500 });
+      }
+    });
+  }
+
   const argv = process.argv;
   const filePath = argv.find((arg) => arg.endsWith('.pppro'));
   if (filePath) fileToOpen = filePath;
@@ -959,11 +1204,13 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', async () => {
+  trialManager.stopSession();
   await stopHeartbeat();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', async () => {
+  trialManager.stopSession();
   await stopHeartbeat();
 });
 
