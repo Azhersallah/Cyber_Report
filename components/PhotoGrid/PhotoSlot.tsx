@@ -346,12 +346,11 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   return (
     <div 
       className={cn(
-        "relative group bg-white border select-none transition-all duration-200",
+        "relative group bg-white border select-none transition-all duration-200 print:border-transparent print:ring-0 print:shadow-none",
         roundingClass,
         className,
-        !photo ? "shadow-none border-dashed border-muted-foreground/40 hover:border-muted-foreground print:border-muted-foreground/40" : "shadow-sm border-border print:border-border",
-        isDragOver && "ring-2 ring-foreground/20 border-foreground/50 scale-[1.01] z-20",
-        "print:shadow-none"
+        !photo ? "shadow-none border-dashed border-muted-foreground/40 hover:border-muted-foreground" : "shadow-sm border-border",
+        isDragOver && "ring-2 ring-foreground/20 border-foreground/50 scale-[1.01] z-20"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}

@@ -1,6 +1,6 @@
 {
     "name": "photo-printer-pro",
-    "version": "1.1.1",
+    "version": "1.1.0",
     "type": "module",
     "main": "loader.cjs",
     "description": "Professional Photo Printing Tool for print shops",

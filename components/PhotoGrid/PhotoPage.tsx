@@ -340,7 +340,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
         return (
             <div 
                 key={sectionIdx} 
-                className={`border border-gray-200 relative bg-white flex items-center justify-center group ${!useFixedSize ? 'h-full w-full' : ''}`}
+                className={`border border-gray-200 print:border-transparent relative bg-white flex items-center justify-center group ${!useFixedSize ? 'h-full w-full' : ''}`}
                 style={useFixedSize ? a6FixedSizeStyle : undefined}
             >
                 {/* Each A6 section: 3 columns × 4 rows = 12 ID photos */}
@@ -348,7 +348,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                     {Array(12).fill(null).map((_, i) => {
                         const photoIndex = sectionPhotoStartIndex + i;
                         return (
-                            <div key={i} className="relative overflow-hidden bg-white border border-gray-100" style={{ width: '2.7cm', height: '3.7cm' }}>
+                            <div key={i} className="relative overflow-hidden bg-white border border-gray-100 print:border-transparent" style={{ width: '2.7cm', height: '3.7cm' }}>
                                 {i < slotCount ? (
                                     <PhotoSlot 
                                         index={i} 
@@ -443,9 +443,9 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
 
     if (layout === 'businesscard') {
       return (
-         <div className="grid grid-cols-2 grid-rows-5 gap-0 h-full w-full border-t border-l border-gray-100">
+         <div className="grid grid-cols-2 grid-rows-5 gap-0 h-full w-full border-t border-l border-gray-100 print:border-transparent">
             {Array(10).fill(null).map((_, i) => (
-                 <div key={i} className="border-r border-b border-gray-200 p-1.5 relative overflow-hidden bg-white">
+                 <div key={i} className="border-r border-b border-gray-200 p-1.5 relative overflow-hidden bg-white print:border-transparent">
                     <PhotoSlot 
                         index={i} 
                         slotId={`p${pageIndex}_s${i}`}
@@ -471,13 +471,13 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
       const isFormHidden = formSize?.hidden;
 
       return (
-         <div className="flex gap-0 h-full w-full border-t border-l border-gray-100 bg-white" onClick={() => { dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: null }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}>
+         <div className="flex gap-0 h-full w-full border-t border-l border-gray-100 bg-white print:border-transparent" onClick={() => { dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: null }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}>
             {/* Left side - 1 large form */}
             {!isFormHidden && (
                <div 
                   onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: formGIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
                   className={cn(
-                     "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0",
+                     "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0 print:border-transparent print:ring-0 print:bg-transparent",
                      isFormSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
                   )}
                   style={{ 
@@ -522,7 +522,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                         key={i} 
                         onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: gIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
                         className={cn(
-                           "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0",
+                           "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0 print:border-transparent print:ring-0 print:bg-transparent",
                            isSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
                         )}
                         style={{
@@ -560,7 +560,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
       const isFormHidden = formSize?.hidden;
 
       return (
-         <div className="flex gap-0 h-full w-full border-t border-l border-gray-100 bg-white" onClick={() => { dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: null }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}>
+         <div className="flex gap-0 h-full w-full border-t border-l border-gray-100 bg-white print:border-transparent" onClick={() => { dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: null }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}>
             {/* Left side - 5 cards vertically stacked */}
             <div className="flex-1 flex flex-col gap-0 items-end h-full min-h-0 bg-white">
                {Array(5).fill(null).map((_, i) => {
@@ -580,7 +580,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                         key={i} 
                         onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: gIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
                         className={cn(
-                           "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0",
+                           "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0 print:border-transparent print:ring-0 print:bg-transparent",
                            isSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
                         )}
                         style={{
@@ -613,7 +613,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                <div 
                   onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: formGIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
                   className={cn(
-                     "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0",
+                     "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0 print:border-transparent print:ring-0 print:bg-transparent",
                      isFormSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
                   )}
                   style={{ 
