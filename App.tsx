@@ -11,6 +11,10 @@ import TemplateSelector from './components/Resume/TemplateSelector';
 import BusinessCardCanvas from './components/BusinessCard/BusinessCardCanvas';
 import BusinessCardEditor from './components/BusinessCard/BusinessCardEditor';
 import type { BusinessCardSection } from './components/BusinessCard/BusinessCardEditor';
+import { QRCodeCanvas } from './components/QRCode/QRCodeCanvas';
+import { QRCodeEditor } from './components/QRCode/QRCodeEditor';
+import { TasksTab } from './components/Tasks/TasksTab';
+import { StickersTab } from './components/Stickers/StickersTab';
 
 import ImageEditor from './components/Editor/ImageEditor';
 import TextFormattingToolbar from './components/Editor/TextFormattingToolbar';
@@ -316,6 +320,9 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
   const [isPrinting, setIsPrinting] = useState(false);
   const [activeResumeSection, setActiveResumeSection] = useState<'personal' | 'photo' | 'experience' | 'education' | 'skills' | 'languages' | 'template' | 'customize'>('personal');
   const [activeBusinessCardSection, setActiveBusinessCardSection] = useState<BusinessCardSection>('info');
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ pageIndex: number; startIndex: number; count: number } | null>(null);
+  const [resetConfirmation, setResetConfirmation] = useState<{ pageIndex: number; startIndex: number; count: number } | null>(null);
+  const [droppedProjectFile, setDroppedProjectFile] = useState<string | null>(null);
   const t = (key: string) => getTranslation(key, state.language);
 
   const handleEditResumePhoto = () => {
@@ -344,12 +351,7 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
     action();
   };
 
-  // Custom Modal for deletion
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{
-    pageIndex: number;
-    startIndex: number;
-    count: number;
-  } | null>(null);
+
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -373,11 +375,57 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
       };
 
       ipcRenderer.on('open-project-encrypted', handleOpenEncryptedProject);
+      
+      // Check for pending file to open immediately after mount (fixes double-click open timing issues)
+      ipcRenderer.invoke('get-pending-file').then(async (result: any) => {
+        if (result && result.success && result.content) {
+          try {
+            const decryptedJson = await decryptProjectData(result.content);
+            const parsed = JSON.parse(decryptedJson);
+            dispatch({ type: 'LOAD_PROJECT', payload: parsed });
+          } catch (err) {
+            console.error("IPC Opening Failed (Pending File):", err);
+          }
+        }
+      });
+
       return () => {
         ipcRenderer.removeListener('open-project-encrypted', handleOpenEncryptedProject);
       };
     }
   }, [dispatch]);
+
+  // Global drag & drop handler for .pppro project files
+  useEffect(() => {
+    const handleGlobalDragOver = (e: DragEvent) => {
+      e.preventDefault(); // Necessary to allow dropping
+    };
+
+    const handleGlobalDrop = (e: DragEvent) => {
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+
+      const file = files[0];
+      if (file.name.toLowerCase().endsWith('.pppro')) {
+        e.preventDefault();
+        e.stopPropagation(); // Stop other elements like DropZone from handling this
+
+        const filePath = (file as any).path; // Electron file path
+        if (filePath && window && (window as any).process && (window as any).process.type === 'renderer') {
+          setDroppedProjectFile(filePath);
+        }
+      }
+    };
+
+    // Use capture phase (true) to intercept the event before child elements (like PhotoSlot) call stopPropagation()
+    window.addEventListener('dragover', handleGlobalDragOver, true);
+    window.addEventListener('drop', handleGlobalDrop, true);
+
+    return () => {
+      window.removeEventListener('dragover', handleGlobalDragOver, true);
+      window.removeEventListener('drop', handleGlobalDrop, true);
+    };
+  }, []);
 
   const PAGE_WIDTH_PX = 794;
 
@@ -592,9 +640,14 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
     while (currentPhotoIndex < activePhotos.length || pageIndex < state.manualPageCount) {
       let layoutId: LayoutType = state.pageLayouts[pageIndex] || state.globalLayout;
       if (state.mode === 'businesscard') {
-        if (state.globalLayout === 'businesscard-form') layoutId = 'businesscard-form';
-        else if (state.globalLayout === 'businesscard-form-reverse') layoutId = 'businesscard-form-reverse';
-        else layoutId = 'businesscard';
+        const pageLayout = state.pageLayouts[pageIndex];
+        if (pageLayout === 'businesscard' || pageLayout === 'businesscard-form' || pageLayout === 'businesscard-form-reverse') {
+          layoutId = pageLayout;
+        } else {
+          if (state.globalLayout === 'businesscard-form') layoutId = 'businesscard-form';
+          else if (state.globalLayout === 'businesscard-form-reverse') layoutId = 'businesscard-form-reverse';
+          else layoutId = 'businesscard';
+        }
       }
 
       const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
@@ -677,10 +730,15 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
       capacity = defaultLayout ? defaultLayout.capacity : 1;
     }
     dispatch({ type: 'INSERT_PAGE', payload: { insertIndex: insertAtIndex, count: capacity === 0 ? 1 : capacity, insertAtPageIndex } });
+    dispatch({ type: 'SELECT_PAGE', payload: insertAtPageIndex });
   };
 
   const handleDeletePageRequest = (pIndex: number, startIdx: number, count: number) => {
     setDeleteConfirmation({ pageIndex: pIndex, startIndex: startIdx, count });
+  };
+
+  const handleResetPageRequest = (pIndex: number, startIdx: number, count: number) => {
+    setResetConfirmation({ pageIndex: pIndex, startIndex: startIdx, count });
   };
 
   const confirmDeletePage = () => {
@@ -697,13 +755,22 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
     }
   };
 
-  const handleChangePageLayout = (pIndex: number, newLayout: LayoutType) => {
-    // In business card mode, change global layout instead of page layout
-    if (state.mode === 'businesscard') {
-      dispatch({ type: 'SET_LAYOUT', payload: newLayout });
-    } else {
-      dispatch({ type: 'SET_PAGE_LAYOUT', payload: { pageIndex: pIndex, layout: newLayout } });
+  const confirmResetPage = () => {
+    if (resetConfirmation) {
+      dispatch({
+        type: 'RESET_PAGE',
+        payload: {
+          pageIndex: resetConfirmation.pageIndex,
+          startIndex: resetConfirmation.startIndex,
+          count: resetConfirmation.count
+        }
+      });
+      setResetConfirmation(null);
     }
+  };
+
+  const handleChangePageLayout = (pIndex: number, newLayout: LayoutType) => {
+    dispatch({ type: 'SET_PAGE_LAYOUT', payload: { pageIndex: pIndex, layout: newLayout } });
   };
 
   const handlePrintConfirm = (selectedPages: number[]) => {
@@ -742,19 +809,41 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
 
       <Header onPrintClick={() => requireActivation(() => setShowPrintModal(true))} isActivated={isActivated} />
       <TextFormattingToolbar />
-      <FloatingZoomControls maxPossibleZoom={maxPossibleZoom} />
+      {state.mode !== 'qrcode' && state.mode !== 'tasks' && <FloatingZoomControls maxPossibleZoom={maxPossibleZoom} />}
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
-          isActivated={isActivated} 
-          activeResumeSection={activeResumeSection}
-          onResumeSectionChange={setActiveResumeSection}
-          activeBusinessCardSection={activeBusinessCardSection}
-          onBusinessCardSectionChange={setActiveBusinessCardSection}
-        />
+        {state.mode !== 'qrcode' && state.mode !== 'tasks' && state.mode !== 'stickers' && (
+          <Sidebar 
+            isActivated={isActivated} 
+            activeResumeSection={activeResumeSection}
+            onResumeSectionChange={setActiveResumeSection}
+            activeBusinessCardSection={activeBusinessCardSection}
+            onBusinessCardSectionChange={setActiveBusinessCardSection}
+          />
+        )}
 
-        {/* Business Card Design Mode - Special Layout */}
-        {state.mode === 'businesscard' && state.businessCardDesignMode ? (
+        {/* Tasks Mode */}
+        {state.mode === 'tasks' ? (
+          <div className="flex-1 flex overflow-hidden">
+            <TasksTab />
+          </div>
+        ) : state.mode === 'stickers' ? (
+          <div className="flex-1 flex overflow-hidden">
+            <StickersTab />
+          </div>
+        ) : state.mode === 'qrcode' ? (
+          <div className="flex-1 flex overflow-hidden">
+            {/* QR Code Editor - Left Side (like ID Photo/Business Card) */}
+            <div className="w-80 border-r border-border overflow-y-auto bg-background no-print">
+              <QRCodeEditor />
+            </div>
+            
+            {/* QR Code Canvas - Right Side */}
+            <main className="flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar">
+              <QRCodeCanvas />
+            </main>
+          </div>
+        ) : state.mode === 'businesscard' && state.businessCardDesignMode ? (
           <div className="flex-1 flex overflow-hidden">
             {/* Business Card Editor - Left Side */}
             <div className="w-96 border-r border-border overflow-y-auto bg-background no-print">
@@ -847,6 +936,7 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
                         itemsPerPage={page.capacity}
                         onEditPhoto={setEditingPhoto}
                         onDelete={() => handleDeletePageRequest(page.pageIndex, page.startIndex, page.capacity)}
+                        onReset={() => handleResetPageRequest(page.pageIndex, page.startIndex, page.capacity)}
                         onChangeLayout={(l) => handleChangePageLayout(page.pageIndex, l)}
                         overlayNumbers={page.overlayNumbers}
                       />
@@ -889,6 +979,36 @@ const MainContent: React.FC<{ isActivated: boolean }> = ({ isActivated }) => {
           onConfirm={confirmDeletePage}
           onClose={() => setDeleteConfirmation(null)}
           isDestructive={true}
+        />
+      )}
+
+      {resetConfirmation && (
+        <ConfirmModal
+          isOpen={true}
+          title={state.language === 'ku' ? 'ڕیسێتکردنی پەڕە' : 'Reset Page'}
+          message={state.language === 'ku' ? 'دڵنیایت دەتەوێت هەموو شتێک لەم پەڕەیەدا وەک خۆی لێ بکەیتەوە؟' : 'Are you sure you want to reset everything on this page to default?'}
+          confirmLabel={state.language === 'ku' ? 'ڕیسێت' : 'Reset'}
+          cancelLabel={state.language === 'ku' ? 'پاشگەزبوونەوە' : 'Cancel'}
+          onConfirm={confirmResetPage}
+          onClose={() => setResetConfirmation(null)}
+          isDestructive={true}
+        />
+      )}
+      
+      {droppedProjectFile && (
+        <ConfirmModal
+          isOpen={true}
+          title={state.language === 'ku' ? 'کردنەوەی پرۆژە' : 'Load Project'}
+          message={state.language === 'ku' ? 'ئایا دەتەوێت ئەم پرۆژەیە بکەیتەوە؟ گۆڕانکارییەکانی ئێستات لەدەست دەچێت.' : 'Do you want to load this project? Your current unsaved changes will be lost.'}
+          confirmLabel={state.language === 'ku' ? 'کردنەوە' : 'Load Project'}
+          cancelLabel={state.language === 'ku' ? 'پاشگەزبوونەوە' : 'Cancel'}
+          onConfirm={() => {
+            const { ipcRenderer } = (window as any).require('electron');
+            ipcRenderer.invoke('open-dropped-project', droppedProjectFile);
+            setDroppedProjectFile(null);
+          }}
+          onClose={() => setDroppedProjectFile(null)}
+          isDestructive={false}
         />
       )}
     </div>

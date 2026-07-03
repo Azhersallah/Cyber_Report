@@ -5,13 +5,14 @@ import {
     Layout, Grid, FileText, Check, X, ArrowLeftRight, Hash,
     Move, ArrowUp, Scaling, ChevronLeft, ChevronRight,
     Layers, ImagePlus, User, Briefcase, GraduationCap, Award, Camera, Languages, Trash2, Palette,
-    Phone, Image, PenTool, Building2, Download
+    Phone, Image, PenTool, Building2, Download, Smartphone, Plus
 } from 'lucide-react';
 import { LAYOUTS } from '../../constants';
 import { getTranslation } from '../../utils/translations';
 import { LayoutPreview } from './LayoutPreview';
 import { readFileAsDataURL, generateId } from '../../utils/helpers';
-import { Photo } from '../../types';
+import { WirelessTransferModal } from '../Modals/WirelessTransferModal';
+import { Photo, LayoutType } from '../../types';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '../ui/card';
@@ -92,6 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
     const [appVersion, setAppVersion] = useState<string>('');
     const [showClearResumeConfirm, setShowClearResumeConfirm] = useState(false);
     const [showResumeExportDialog, setShowResumeExportDialog] = useState(false);
+    const [showTransferModal, setShowTransferModal] = useState(false);
 
     // Get app version from package.json or electron
     useEffect(() => {
@@ -378,6 +380,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                     <input type="file" ref={photosInputRef} className="hidden" accept="image/*,.heic,.heif" multiple onChange={handlePhotosUpload} />
                     <Button onClick={() => photosInputRef.current?.click()} className="w-full">
                         <ImagePlus size={16} /> {t('upload.image')}
+                    </Button>
+                    <Button onClick={() => setShowTransferModal(true)} variant="outline" className="w-full" size="sm">
+                        <Smartphone size={14} /> {t('transfer.startShort')}
                     </Button>
                     <p className="text-[9px] text-muted-foreground text-center">
                         {t('upload.hint')}
@@ -769,34 +774,220 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                         
                         {/* Layout Type Toggle */}
                         <div className="flex gap-2">
-                            <Button 
-                                onClick={() => dispatch({ type: 'SET_LAYOUT', payload: 'businesscard' })}
-                                variant={state.globalLayout === 'businesscard' ? 'default' : 'outline'}
-                                size="sm" 
-                                className="flex-1"
-                            >
-                                <Grid size={14} /> {t('card.gridLayout')}
-                            </Button>
-                            <Button 
-                                onClick={() => dispatch({ type: 'SET_LAYOUT', payload: 'businesscard-form' })}
-                                variant={state.globalLayout === 'businesscard-form' || state.globalLayout === 'businesscard-form-reverse' ? 'default' : 'outline'}
-                                size="sm" 
-                                className="flex-1"
-                            >
-                                <FileText size={14} /> {t('card.formLayout')}
-                            </Button>
+                            {(() => {
+                                const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
+                                const activePageLayout = state.pageLayouts[targetPageIndex] || state.globalLayout;
+                                
+                                const handleSetLayout = (layout: LayoutType) => {
+                                    dispatch({ type: 'SET_LAYOUT', payload: layout });
+                                    if (state.selectedPageIndex !== null) {
+                                        dispatch({ type: 'SET_PAGE_LAYOUT', payload: { pageIndex: state.selectedPageIndex, layout } });
+                                    }
+                                };
+
+                                return (
+                                    <>
+                                        <Button 
+                                            onClick={() => handleSetLayout('businesscard')}
+                                            variant={activePageLayout === 'businesscard' ? 'default' : 'outline'}
+                                            size="sm" 
+                                            className="flex-1"
+                                        >
+                                            <Grid size={14} /> {t('card.gridLayout')}
+                                        </Button>
+                                        <Button 
+                                            onClick={() => handleSetLayout('businesscard-form')}
+                                            variant={activePageLayout === 'businesscard-form' || activePageLayout === 'businesscard-form-reverse' ? 'default' : 'outline'}
+                                            size="sm" 
+                                            className="flex-1"
+                                        >
+                                            <FileText size={14} /> {t('card.formLayout')}
+                                        </Button>
+                                    </>
+                                );
+                            })()}
                         </div>
                         
                         <div className="flex flex-col gap-2">
                             <input type="file" ref={frontInputRef} className="hidden" accept="image/*,.heic,.heif" onChange={(e) => handleFill(e, 'right')} />
                             <Button onClick={() => frontInputRef.current?.click()} variant="outline" size="sm" className="w-full">
-                                <Scaling size={14} /> {(state.globalLayout === 'businesscard-form' || state.globalLayout === 'businesscard-form-reverse') ? t('card.fillSmall') : t('card.fillFront')}
+                                <Scaling size={14} /> {(() => {
+                                    const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
+                                    const activePageLayout = state.pageLayouts[targetPageIndex] || state.globalLayout;
+                                    return (activePageLayout === 'businesscard-form' || activePageLayout === 'businesscard-form-reverse') ? t('card.fillSmall') : t('card.fillFront');
+                                })()}
                             </Button>
                             <input type="file" ref={backInputRef} className="hidden" accept="image/*,.heic,.heif" onChange={(e) => handleFill(e, 'left')} />
                             <Button onClick={() => backInputRef.current?.click()} variant="outline" size="sm" className="w-full">
-                                <Scaling size={14} /> {(state.globalLayout === 'businesscard-form' || state.globalLayout === 'businesscard-form-reverse') ? t('card.fillForm') : t('card.fillBack')}
+                                <Scaling size={14} /> {(() => {
+                                    const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
+                                    const activePageLayout = state.pageLayouts[targetPageIndex] || state.globalLayout;
+                                    return (activePageLayout === 'businesscard-form' || activePageLayout === 'businesscard-form-reverse') ? t('card.fillForm') : t('card.fillBack');
+                                })()}
                             </Button>
                         </div>
+
+                        {(() => {
+                            if (state.selectedBusinessCardIndex === null) return null;
+                            const index = state.selectedBusinessCardIndex;
+
+                            // Helper to dynamically calculate page layout and start index of card index
+                            const getPageInfoForCardIndex = (cardIndex: number) => {
+                                let currentPhotoIndex = 0;
+                                for (let p = 0; p < state.manualPageCount; p++) {
+                                    const layoutId = state.pageLayouts[p] || state.globalLayout;
+                                    const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
+                                    if (cardIndex >= currentPhotoIndex && cardIndex < currentPhotoIndex + layoutDef.capacity) {
+                                        return { pageIndex: p, startIndex: currentPhotoIndex, layoutId };
+                                    }
+                                    currentPhotoIndex += layoutDef.capacity;
+                                }
+                                return { pageIndex: 0, startIndex: 0, layoutId: state.globalLayout };
+                            };
+
+                            const { startIndex, layoutId } = getPageInfoForCardIndex(index);
+                            if (layoutId !== 'businesscard-form' && layoutId !== 'businesscard-form-reverse') return null;
+
+                            const isForm = index === startIndex;
+                            const cardSize = state.businessCardSizes?.[index] || { width: 101.5, height: isForm ? 290 : 58, hidden: false };
+                            const isKurdish = state.language === 'ku' || state.language === 'ar';
+
+                            const handleHeightChange = (val: number) => {
+                                let cappedVal = val;
+                                if (isForm) {
+                                    cappedVal = 290;
+                                } else {
+                                    let otherHeightSum = 0;
+                                    for (let i = 1; i <= 5; i++) {
+                                        const gIdx = startIndex + i;
+                                        if (gIdx !== index) {
+                                            if (!state.businessCardSizes?.[gIdx]?.hidden) {
+                                                otherHeightSum += state.businessCardSizes?.[gIdx]?.height || 58;
+                                            }
+                                        }
+                                    }
+                                    const maxAllowedHeight = 290 - otherHeightSum;
+                                    cappedVal = Math.max(10, Math.min(val, maxAllowedHeight));
+                                }
+                                dispatch({
+                                    type: 'UPDATE_BUSINESS_CARD_SIZE',
+                                    payload: { index, width: cardSize.width, height: cappedVal }
+                                });
+                            };
+
+                            const handleDeleteCard = () => {
+                                dispatch({
+                                    type: 'DELETE_BUSINESS_CARD_SLOT',
+                                    payload: index
+                                });
+                            };
+
+                            return (
+                                 <div className="p-3 border border-border rounded-md bg-muted/40 space-y-3 mt-2">
+                                     <p className="text-xs font-semibold text-foreground/80">
+                                         {isKurdish ? `دەستکاری کارتی دیاریکراو (#${index - startIndex + 1})` : `Edit Selected Card (#${index - startIndex + 1})`}
+                                     </p>
+                                     <div className="grid grid-cols-2 gap-2">
+                                         <div className="space-y-1">
+                                             <label className="text-[10px] text-muted-foreground">{isKurdish ? 'پانی (mm)' : 'Width (mm)'}</label>
+                                             <Input
+                                                 type="number"
+                                                 value={cardSize.width}
+                                                 disabled={true}
+                                                 className="h-8 text-xs bg-muted"
+                                             />
+                                         </div>
+                                         <div className="space-y-1">
+                                             <label className="text-[10px] text-muted-foreground">{isKurdish ? 'بەرزی (mm)' : 'Height (mm)'}</label>
+                                             <Input
+                                                 type="number"
+                                                 value={cardSize.height}
+                                                 disabled={isForm}
+                                                 onChange={(e) => handleHeightChange(Number(e.target.value))}
+                                                 onWheel={(e) => e.currentTarget.blur()}
+                                                 className={cn("h-8 text-xs", isForm && "bg-muted")}
+                                             />
+                                         </div>
+                                     </div>
+                                     <Button
+                                         onClick={handleDeleteCard}
+                                         variant="destructive"
+                                         size="sm"
+                                         className="w-full text-xs h-8"
+                                     >
+                                         <Trash2 size={12} className="mr-1" />
+                                         {isKurdish ? 'سڕینەوەی کارت' : 'Delete Card'}
+                                     </Button>
+                                 </div>
+                            );
+                        })()}
+
+                        {/* Hidden/Deleted Cards list */}
+                        {(() => {
+                            const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
+                            const currentLayout = state.pageLayouts?.[targetPageIndex] || state.globalLayout;
+                            if (currentLayout !== 'businesscard-form' && currentLayout !== 'businesscard-form-reverse') return null;
+
+                            const isKurdish = state.language === 'ku' || state.language === 'ar';
+                            
+                            // Helper to calculate start index of page
+                            const getPageStartIndex = (pageIndex: number) => {
+                                let currentPhotoIndex = 0;
+                                for (let p = 0; p < pageIndex; p++) {
+                                    let layoutId = state.pageLayouts[p] || state.globalLayout;
+                                    const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
+                                    currentPhotoIndex += layoutDef.capacity;
+                                }
+                                return currentPhotoIndex;
+                            };
+                            
+                            const startIndex = getPageStartIndex(targetPageIndex);
+                            const hiddenCards = [];
+                            for (let i = 1; i <= 5; i++) {
+                                const gIdx = startIndex + i;
+                                if (state.businessCardSizes?.[gIdx]?.hidden) {
+                                    hiddenCards.push(gIdx);
+                                }
+                            }
+                            if (state.businessCardSizes?.[startIndex]?.hidden) {
+                                hiddenCards.unshift(startIndex);
+                            }
+
+                            if (hiddenCards.length === 0) return null;
+
+                            return (
+                                <div className="p-3 border border-border rounded-md bg-muted/40 space-y-2 mt-2">
+                                    <p className="text-xs font-semibold text-foreground/80">
+                                        {isKurdish ? 'کارتە سڕاوەکان:' : 'Deleted Cards/Slots:'}
+                                    </p>
+                                    <div className="flex flex-col gap-1.5">
+                                        {hiddenCards.map((gIdx) => {
+                                            const isForm = gIdx === startIndex;
+                                            const label = isForm 
+                                                ? (isKurdish ? 'فۆرمی سەرەکی' : 'Main Form') 
+                                                : (isKurdish ? `کارت ${gIdx - startIndex}` : `Card #${gIdx - startIndex}`);
+                                                
+                                            const handleRestore = () => {
+                                                dispatch({
+                                                    type: 'RESTORE_BUSINESS_CARD_SLOT',
+                                                    payload: gIdx
+                                                });
+                                            };
+
+                                            return (
+                                                <div key={gIdx} className="flex items-center justify-between bg-background border rounded px-2 py-1 text-xs">
+                                                    <span className="text-muted-foreground">{label}</span>
+                                                    <Button onClick={handleRestore} size="sm" variant="outline" className="h-6 px-2 text-[10px] py-0.5">
+                                                        <Plus size={10} className="mr-0.5" />
+                                                        {isKurdish ? 'گەڕاندنەوە' : 'Restore'}
+                                                    </Button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </Section>
                 )}
 
@@ -1027,6 +1218,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                 language={state.language}
             />
 
+            <WirelessTransferModal isOpen={showTransferModal} onClose={() => setShowTransferModal(false)} />
         </aside>
     );
 };

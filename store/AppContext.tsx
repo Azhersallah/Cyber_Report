@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
-import { AppState, Photo, AppMode, LayoutType, AppSettings, INITIAL_SETTINGS, Language, ResumeData, CustomizationOptions, BusinessCardData } from '../types';
+import { AppState, Photo, AppMode, LayoutType, AppSettings, INITIAL_SETTINGS, Language, ResumeData, CustomizationOptions, BusinessCardData, QRCodeData } from '../types';
 import { generateId } from '../utils/helpers';
 import { saveResumeData, loadResumeData } from '../utils/resumeStorage';
 
@@ -43,8 +43,16 @@ type Action =
   | { type: 'SET_BUSINESS_CARD_TEMPLATE'; payload: string }
   | { type: 'UPDATE_BUSINESS_CARD_CUSTOMIZATION'; payload: Partial<CustomizationOptions> }
   | { type: 'SET_BUSINESS_CARD_DESIGN_MODE'; payload: boolean }
+  | { type: 'CLEAR_BUSINESS_CARD_DATA' }
+  | { type: 'SELECT_BUSINESS_CARD_SLOT'; payload: number | null }
+  | { type: 'SELECT_PAGE'; payload: number | null }
+  | { type: 'UPDATE_BUSINESS_CARD_SIZE'; payload: { index: number; width: number; height: number } }
+  | { type: 'DELETE_BUSINESS_CARD_SLOT'; payload: number }
+  | { type: 'RESTORE_BUSINESS_CARD_SLOT'; payload: number }
   | { type: 'SET_BUSINESS_CARD_LANGUAGE'; payload: Language }
-  | { type: 'CLEAR_BUSINESS_CARD_DATA' };
+  | { type: 'RESET_PAGE'; payload: { pageIndex: number; startIndex: number; count: number } }
+  // QR Code Generator Actions
+  | { type: 'UPDATE_QR_CODE_DATA'; payload: Partial<QRCodeData> };
 
 // Initial State
 const initialState: AppState = {
@@ -66,6 +74,7 @@ const initialState: AppState = {
   pageLayouts: {},
   currentSectionIndex: 0,
   manualPageCount: 1,
+  selectedPageIndex: 0,
   // Resume Builder Initial State
   resumeData: {
     personalInfo: {
@@ -108,7 +117,27 @@ const initialState: AppState = {
   selectedBusinessCardTemplate: 'modern',
   businessCardCustomization: {},
   businessCardDesignMode: false,
-  businessCardLanguage: 'en'
+  businessCardLanguage: 'en',
+  selectedBusinessCardIndex: null,
+  businessCardSizes: {},
+  // QR Code Generator Initial State
+  qrCodeData: {
+    type: 'text',
+    content: '',
+    wifiSSID: '',
+    wifiPassword: '',
+    wifiSecurity: 'WPA',
+    wifiHidden: false,
+    latitude: '',
+    longitude: '',
+    size: 256,
+    fgColor: '#000000',
+    bgColor: '#FFFFFF',
+    includeMargin: true,
+    errorLevel: 'M',
+    logoImage: null,
+    logoSize: 20,
+  }
 };
 
 // Helper to get the key for the current mode's photo array
@@ -308,6 +337,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         pageLayouts: {},
         currentSectionIndex: 0,
         manualPageCount: 1,
+        selectedPageIndex: 0,
         settings: {
           ...state.settings,
           footerDate: todayDate
@@ -333,6 +363,16 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const newPageTitles: Record<number, string> = {};
       const newPageLayouts: Record<number, LayoutType> = {};
       const newTextAreas: Record<string, string> = {};
+      const newBusinessCardSizes: Record<number, any> = {};
+
+      Object.keys(state.businessCardSizes || {}).forEach(k => {
+        const idx = parseInt(k);
+        if (idx >= insertIndex) {
+          newBusinessCardSizes[idx + count] = state.businessCardSizes[idx];
+        } else {
+          newBusinessCardSizes[idx] = state.businessCardSizes[idx];
+        }
+      });
 
       Object.keys(state.pageTitles).forEach(k => {
         const p = parseInt(k);
@@ -363,11 +403,51 @@ const appReducer = (state: AppState, action: Action): AppState => {
         pageTitles: newPageTitles,
         pageLayouts: newPageLayouts,
         textAreas: newTextAreas,
+        businessCardSizes: newBusinessCardSizes,
         manualPageCount: state.manualPageCount + 1
       };
     }
     case 'DELETE_PAGE': {
       const { pageIndex, startIndex, count } = action.payload;
+      
+      if (state.manualPageCount <= 1) {
+        // Just clear the contents of this single page, don't delete the page itself.
+        const newPhotos = [...activePhotos];
+        if (count > 0 && startIndex < newPhotos.length) {
+          for (let i = startIndex; i < startIndex + count && i < newPhotos.length; i++) {
+            newPhotos[i] = null;
+          }
+        }
+        
+        const newPageTitles = { ...state.pageTitles };
+        delete newPageTitles[pageIndex];
+
+        const newPageLayouts = { ...state.pageLayouts };
+        delete newPageLayouts[pageIndex];
+
+        const newTextAreas = { ...state.textAreas };
+        Object.keys(newTextAreas).forEach(key => {
+          const match = key.match(/^page_(\d+)(.*)$/);
+          if (match && parseInt(match[1]) === pageIndex) {
+            delete newTextAreas[key];
+          }
+        });
+
+        const newBusinessCardSizes = { ...state.businessCardSizes };
+        for (let i = startIndex; i < startIndex + count; i++) {
+          delete newBusinessCardSizes[i];
+        }
+
+        return {
+          ...state,
+          [activeKey]: newPhotos,
+          pageTitles: newPageTitles,
+          textAreas: newTextAreas,
+          pageLayouts: newPageLayouts,
+          businessCardSizes: newBusinessCardSizes
+        };
+      }
+
       const newPhotos = [...activePhotos];
       if (count > 0 && startIndex < newPhotos.length) {
         newPhotos.splice(startIndex, count);
@@ -376,6 +456,17 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const newPageTitles: Record<number, string> = {};
       const newTextAreas: Record<string, string> = {};
       const newPageLayouts: Record<number, LayoutType> = {};
+      const newBusinessCardSizes: Record<number, any> = {};
+
+      Object.keys(state.businessCardSizes || {}).forEach(k => {
+        const idx = parseInt(k);
+        if (idx >= startIndex && idx < startIndex + count) return;
+        if (idx >= startIndex + count) {
+          newBusinessCardSizes[idx - count] = state.businessCardSizes[idx];
+        } else {
+          newBusinessCardSizes[idx] = state.businessCardSizes[idx];
+        }
+      });
 
       Object.keys(state.pageLayouts).forEach(k => {
         const p = parseInt(k);
@@ -409,7 +500,46 @@ const appReducer = (state: AppState, action: Action): AppState => {
         pageTitles: newPageTitles,
         textAreas: newTextAreas,
         pageLayouts: newPageLayouts,
+        businessCardSizes: newBusinessCardSizes,
         manualPageCount: Math.max(1, state.manualPageCount - 1)
+      };
+    }
+    case 'RESET_PAGE': {
+      const { pageIndex, startIndex, count } = action.payload;
+      const newPhotos = [...activePhotos];
+      
+      if (count > 0 && startIndex < newPhotos.length) {
+        for (let i = startIndex; i < startIndex + count && i < newPhotos.length; i++) {
+          newPhotos[i] = null;
+        }
+      }
+      
+      const newPageTitles = { ...state.pageTitles };
+      delete newPageTitles[pageIndex];
+
+      const newPageLayouts = { ...state.pageLayouts };
+      delete newPageLayouts[pageIndex];
+
+      const newTextAreas = { ...state.textAreas };
+      Object.keys(newTextAreas).forEach(key => {
+        const match = key.match(/^page_(\d+)(.*)$/);
+        if (match && parseInt(match[1]) === pageIndex) {
+          delete newTextAreas[key];
+        }
+      });
+
+      const newBusinessCardSizes = { ...state.businessCardSizes };
+      for (let i = startIndex; i < startIndex + count; i++) {
+        delete newBusinessCardSizes[i];
+      }
+
+      return {
+        ...state,
+        [activeKey]: newPhotos,
+        pageTitles: newPageTitles,
+        textAreas: newTextAreas,
+        pageLayouts: newPageLayouts,
+        businessCardSizes: newBusinessCardSizes
       };
     }
     case 'SET_LAYOUT':
@@ -580,6 +710,151 @@ const appReducer = (state: AppState, action: Action): AppState => {
           logo: null,
           photo: null,
           social: {}
+        }
+      };
+
+    case 'SELECT_BUSINESS_CARD_SLOT':
+      return { ...state, selectedBusinessCardIndex: action.payload };
+
+    case 'SELECT_PAGE':
+      return { ...state, selectedPageIndex: action.payload };
+
+    case 'UPDATE_BUSINESS_CARD_SIZE': {
+      const sizes = { ...state.businessCardSizes };
+      sizes[action.payload.index] = {
+        ...sizes[action.payload.index],
+        width: action.payload.width,
+        height: action.payload.height,
+        hidden: false
+      };
+      return { ...state, businessCardSizes: sizes };
+    }
+
+    case 'DELETE_BUSINESS_CARD_SLOT': {
+      const sizes = { ...state.businessCardSizes };
+      sizes[action.payload] = {
+        ...sizes[action.payload],
+        hidden: true
+      };
+      const newCardPhotos = [...state.cardPhotos];
+      if (action.payload < newCardPhotos.length) {
+        newCardPhotos[action.payload] = null;
+      }
+      return { 
+        ...state, 
+        businessCardSizes: sizes, 
+        cardPhotos: newCardPhotos,
+        selectedBusinessCardIndex: state.selectedBusinessCardIndex === action.payload ? null : state.selectedBusinessCardIndex
+      };
+    }
+
+    case 'RESTORE_BUSINESS_CARD_SLOT': {
+      const gIdx = action.payload;
+      const sizes = { ...state.businessCardSizes };
+
+      // Helper to dynamically calculate page layout and start index of card index
+      const getPageInfo = (cardIndex: number) => {
+        let currentPhotoIndex = 0;
+        let pageIdx = 0;
+        const LAYOUTS_LIST = [
+          { id: 'businesscard', capacity: 10 },
+          { id: 'businesscard-form', capacity: 6 },
+          { id: 'businesscard-form-reverse', capacity: 6 }
+        ];
+        while (true) {
+          let layoutId = state.pageLayouts[pageIdx] || state.globalLayout;
+          const layoutDef = LAYOUTS_LIST.find(l => l.id === layoutId) || { id: 'businesscard', capacity: 10 };
+          const capacity = layoutDef.capacity;
+          if (cardIndex >= currentPhotoIndex && cardIndex < currentPhotoIndex + capacity) {
+            return { pageIndex: pageIdx, startIndex: currentPhotoIndex, layoutId };
+          }
+          currentPhotoIndex += capacity;
+          pageIdx++;
+          if (pageIdx > 1000) break;
+        }
+        return { pageIndex: 0, startIndex: 0, layoutId: state.globalLayout };
+      };
+
+      const { startIndex, layoutId } = getPageInfo(gIdx);
+      const isForm = gIdx === startIndex;
+      const restoringWidth = sizes[gIdx]?.width || 101.5;
+      const restoringHeight = sizes[gIdx]?.height || (isForm ? 290 : 58);
+
+      sizes[gIdx] = {
+        ...sizes[gIdx],
+        width: restoringWidth,
+        height: restoringHeight,
+        hidden: false
+      };
+
+      // Balance card heights to prevent page overflow
+      if (!isForm && (layoutId === 'businesscard-form' || layoutId === 'businesscard-form-reverse')) {
+        const visibleCards = [];
+        for (let i = 1; i <= 5; i++) {
+          const idx = startIndex + i;
+          const cardSize = sizes[idx];
+          // If cardSize is undefined, it means it's an unmodified card, which is visible and has height 58.
+          if (idx === gIdx || !cardSize?.hidden) {
+            visibleCards.push({
+              index: idx,
+              height: idx === gIdx ? restoringHeight : (cardSize?.height || 58)
+            });
+          }
+        }
+
+        let totalHeight = visibleCards.reduce((sum, c) => sum + c.height, 0);
+        if (totalHeight > 290) {
+          let overflow = totalHeight - 290;
+
+          // Shrink cards that are larger than 58 first
+          const enlargedCards = visibleCards.filter(c => c.height > 58);
+          const capacity = enlargedCards.reduce((sum, c) => sum + (c.height - 58), 0);
+
+          if (capacity >= overflow) {
+            enlargedCards.forEach(c => {
+              const reduction = overflow * (c.height - 58) / capacity;
+              c.height -= reduction;
+            });
+          } else {
+            enlargedCards.forEach(c => {
+              c.height = 58;
+            });
+            overflow -= capacity;
+
+            // Shrink further down to 10 if needed
+            const capacity2 = visibleCards.reduce((sum, c) => sum + (c.height - 10), 0);
+            if (capacity2 >= overflow) {
+              visibleCards.forEach(c => {
+                const reduction = overflow * (c.height - 10) / capacity2;
+                c.height -= reduction;
+              });
+            } else {
+              visibleCards.forEach(c => {
+                c.height = 10;
+              });
+            }
+          }
+
+          // Write back precise heights (without rounding, to prevent CSS overflow due to subpixel rendering)
+          visibleCards.forEach(c => {
+            sizes[c.index] = {
+              ...sizes[c.index],
+              height: c.height
+            };
+          });
+        }
+      }
+
+      return { ...state, businessCardSizes: sizes };
+    }
+
+    // QR Code Generator Reducers
+    case 'UPDATE_QR_CODE_DATA':
+      return {
+        ...state,
+        qrCodeData: {
+          ...state.qrCodeData,
+          ...action.payload
         }
       };
     

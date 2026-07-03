@@ -4,7 +4,7 @@ import { Photo, LayoutType } from '../../types';
 import PhotoSlot from './PhotoSlot';
 import { useApp } from '../../store/AppContext';
 import { getTranslation } from '../../utils/translations';
-import { Trash2, LayoutTemplate, ArrowLeftRight, Check, Plus, Type, X, Download } from 'lucide-react';
+import { Trash2, LayoutTemplate, ArrowLeftRight, Check, Plus, Type, X, Download, RotateCcw, Grid, FileText } from 'lucide-react';
 import { LAYOUTS } from '../../constants';
 import { LayoutPreview } from '../Layout/LayoutPreview';
 import { Button } from '../ui/button';
@@ -83,19 +83,20 @@ interface PhotoPageProps {
   startIndex: number;
   onEditPhoto: (photo: Photo) => void;
   onDelete: () => void;
-  onChangeLayout: (layout: LayoutType) => void;
-  isPrinting?: boolean; 
+  onReset?: () => void;
+  onChangeLayout?: (layout: LayoutType) => void;
   overlayNumbers?: number[];
 }
 
 const PhotoPage: React.FC<PhotoPageProps> = memo(({ 
     pageIndex, 
+    startIndex,
     photos, 
     layout, 
     itemsPerPage, 
-    startIndex, 
     onEditPhoto, 
     onDelete, 
+    onReset,
     onChangeLayout,
     overlayNumbers
 }) => {
@@ -304,11 +305,8 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
           if (layout === '1text') target = '1text-side';
           else if (layout === '1text-side') target = '1text';
           else target = '1text';
-      } else if (btnLayoutId === 'businesscard') {
-          // Only swap direction if already in form layout, don't change to grid
-          if (layout === 'businesscard-form') target = 'businesscard-form-reverse';
-          else if (layout === 'businesscard-form-reverse') target = 'businesscard-form';
-          else target = layout; // Keep current layout if in grid
+      } else if (btnLayoutId.startsWith('businesscard')) {
+          target = btnLayoutId;
       }
       onChangeLayout(target as LayoutType);
       setShowLayoutMenu(false);
@@ -467,85 +465,179 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
     }
 
     if (layout === 'businesscard-form') {
+      const formGIdx = startIndex + 0;
+      const formSize = state.businessCardSizes?.[formGIdx] || { width: 101.5, height: 290 };
+      const isFormSelected = state.selectedBusinessCardIndex === formGIdx;
+      const isFormHidden = formSize?.hidden;
+
       return (
-         <div className="grid grid-cols-2 gap-0 h-full w-full border-t border-l border-gray-100">
-            {/* Left side - 1 large form (takes full height, same card size) */}
-            <div className="border-r border-b border-gray-200 p-1.5 relative overflow-hidden bg-white h-full min-h-0">
-               <PhotoSlot 
-                  index={0} 
-                  slotId={`p${pageIndex}_form`}
-                  photo={photos[0]} 
-                  badgeColor={settings.badgeColor}
-                  className="w-full h-full shadow-none rounded-none min-h-0"
-                  onEdit={onEditPhoto}
-                  onInsert={(p) => handleInsertPhoto(0, p)}
-                  enableInsertTriggers={false}
-                  globalIndex={startIndex + 0}
-                  onSwap={handleSwapPhotos}
-               />
-            </div>
-            
-            {/* Right side - 5 cards vertically stacked */}
-            <div className="grid grid-cols-1 grid-rows-5 gap-0 h-full min-h-0">
-               {Array(5).fill(null).map((_, i) => (
-                  <div key={i} className="border-r border-b border-gray-200 p-1.5 relative overflow-hidden bg-white h-full min-h-0">
+         <div className="flex gap-0 h-full w-full border-t border-l border-gray-100 bg-white" onClick={() => { dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: null }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}>
+            {/* Left side - 1 large form */}
+            {!isFormHidden && (
+               <div 
+                  onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: formGIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
+                  className={cn(
+                     "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0",
+                     isFormSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
+                  )}
+                  style={{ 
+                     width: `${formSize.width}mm`, 
+                     height: `${formSize.height}mm`,
+                     flex: 'none'
+                  }}
+               >
+                  <div className="w-full h-full flex items-center justify-center min-h-0 min-w-0">
                      <PhotoSlot 
-                        index={i + 1} 
-                        slotId={`p${pageIndex}_s${i + 1}`}
-                        photo={photos[i + 1]} 
+                        index={0} 
+                        slotId={`p${pageIndex}_form`}
+                        photo={photos[0] || undefined} 
                         badgeColor={settings.badgeColor}
                         className="w-full h-full shadow-none rounded-none min-h-0"
                         onEdit={onEditPhoto}
-                        onInsert={(p) => handleInsertPhoto(i + 1, p)}
+                        onInsert={(p) => handleInsertPhoto(0, p)}
                         enableInsertTriggers={false}
-                        globalIndex={startIndex + i + 1}
+                        globalIndex={formGIdx}
                         onSwap={handleSwapPhotos}
                      />
                   </div>
-               ))}
+               </div>
+            )}
+            
+            {/* Right side - 5 cards vertically stacked */}
+            <div className="flex-1 flex flex-col gap-0 items-start h-full min-h-0 bg-white">
+               {Array(5).fill(null).map((_, i) => {
+                  const idx = i + 1;
+                  const gIdx = startIndex + idx;
+                  const cardSize = state.businessCardSizes?.[gIdx];
+                  const isSelected = state.selectedBusinessCardIndex === gIdx;
+
+                  if (cardSize?.hidden) {
+                     return null;
+                  }
+
+                  const actualCardSize = cardSize || { width: 101.5, height: 58 };
+
+                  return (
+                     <div 
+                        key={i} 
+                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: gIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
+                        className={cn(
+                           "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0",
+                           isSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
+                        )}
+                        style={{
+                           flex: 'none',
+                           height: `${actualCardSize.height}mm`,
+                           width: `${actualCardSize.width}mm`
+                        }}
+                     >
+                        <div className="w-full h-full flex items-center justify-center min-h-0 min-w-0">
+                           <PhotoSlot 
+                              index={idx} 
+                              slotId={`p${pageIndex}_s${idx}`}
+                              photo={photos[idx] || undefined} 
+                              badgeColor={settings.badgeColor}
+                              className="w-full h-full shadow-none rounded-none min-h-0"
+                              onEdit={onEditPhoto}
+                              onInsert={(p) => handleInsertPhoto(idx, p)}
+                              enableInsertTriggers={false}
+                              globalIndex={gIdx}
+                              onSwap={handleSwapPhotos}
+                           />
+                        </div>
+                     </div>
+                  );
+               })}
             </div>
          </div>
       );
     }
 
     if (layout === 'businesscard-form-reverse') {
+      const formGIdx = startIndex + 5;
+      const formSize = state.businessCardSizes?.[formGIdx] || { width: 101.5, height: 290 };
+      const isFormSelected = state.selectedBusinessCardIndex === formGIdx;
+      const isFormHidden = formSize?.hidden;
+
       return (
-         <div className="grid grid-cols-2 gap-0 h-full w-full border-t border-l border-gray-100">
+         <div className="flex gap-0 h-full w-full border-t border-l border-gray-100 bg-white" onClick={() => { dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: null }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}>
             {/* Left side - 5 cards vertically stacked */}
-            <div className="grid grid-cols-1 grid-rows-5 gap-0 h-full min-h-0">
-               {Array(5).fill(null).map((_, i) => (
-                  <div key={i} className="border-r border-b border-gray-200 p-1.5 relative overflow-hidden bg-white h-full min-h-0">
+            <div className="flex-1 flex flex-col gap-0 items-end h-full min-h-0 bg-white">
+               {Array(5).fill(null).map((_, i) => {
+                  const idx = i + 1;
+                  const gIdx = startIndex + idx;
+                  const cardSize = state.businessCardSizes?.[gIdx];
+                  const isSelected = state.selectedBusinessCardIndex === gIdx;
+
+                  if (cardSize?.hidden) {
+                     return null;
+                  }
+
+                  const actualCardSize = cardSize || { width: 101.5, height: 58 };
+
+                  return (
+                     <div 
+                        key={i} 
+                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: gIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
+                        className={cn(
+                           "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0",
+                           isSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
+                        )}
+                        style={{
+                           flex: 'none',
+                           height: `${actualCardSize.height}mm`,
+                           width: `${actualCardSize.width}mm`
+                        }}
+                     >
+                        <div className="w-full h-full flex items-center justify-center min-h-0 min-w-0">
+                           <PhotoSlot 
+                              index={idx} 
+                              slotId={`p${pageIndex}_s${idx}`}
+                              photo={photos[idx] || undefined} 
+                              badgeColor={settings.badgeColor}
+                              className="w-full h-full shadow-none rounded-none min-h-0"
+                              onEdit={onEditPhoto}
+                              onInsert={(p) => handleInsertPhoto(idx, p)}
+                              enableInsertTriggers={false}
+                              globalIndex={gIdx}
+                              onSwap={handleSwapPhotos}
+                           />
+                        </div>
+                     </div>
+                  );
+               })}
+            </div>
+
+            {/* Right side - 1 large form */}
+            {!isFormHidden && (
+               <div 
+                  onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: formGIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
+                  className={cn(
+                     "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0",
+                     isFormSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
+                  )}
+                  style={{ 
+                     width: `${formSize.width}mm`, 
+                     height: `${formSize.height}mm`,
+                     flex: 'none'
+                  }}
+               >
+                  <div className="w-full h-full flex items-center justify-center min-h-0 min-w-0">
                      <PhotoSlot 
-                        index={i + 1} 
-                        slotId={`p${pageIndex}_s${i + 1}`}
-                        photo={photos[i + 1]} 
+                        index={0} 
+                        slotId={`p${pageIndex}_form`}
+                        photo={photos[0] || undefined} 
                         badgeColor={settings.badgeColor}
                         className="w-full h-full shadow-none rounded-none min-h-0"
                         onEdit={onEditPhoto}
-                        onInsert={(p) => handleInsertPhoto(i + 1, p)}
+                        onInsert={(p) => handleInsertPhoto(0, p)}
                         enableInsertTriggers={false}
-                        globalIndex={startIndex + i + 1}
+                        globalIndex={formGIdx}
                         onSwap={handleSwapPhotos}
                      />
                   </div>
-               ))}
-            </div>
-            
-            {/* Right side - 1 large form (takes full height, same card size) */}
-            <div className="border-r border-b border-gray-200 p-1.5 relative overflow-hidden bg-white h-full min-h-0">
-               <PhotoSlot 
-                  index={0} 
-                  slotId={`p${pageIndex}_form`}
-                  photo={photos[0]} 
-                  badgeColor={settings.badgeColor}
-                  className="w-full h-full shadow-none rounded-none min-h-0"
-                  onEdit={onEditPhoto}
-                  onInsert={(p) => handleInsertPhoto(0, p)}
-                  enableInsertTriggers={false}
-                  globalIndex={startIndex + 0}
-                  onSwap={handleSwapPhotos}
-               />
-            </div>
+               </div>
+            )}
          </div>
       );
     }
@@ -847,17 +939,22 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
         fontFamily: settings.defaultFontFamily || 'Inter',
         paddingTop: `${4 + (settings.marginTop ?? 0)}mm`,
         paddingRight: `${3 + (settings.marginRight ?? 0)}mm`,
-        paddingBottom: `${3 + (settings.marginBottom ?? 0)}mm`,
+                        paddingBottom: `${3 + (settings.marginBottom ?? 0)}mm`,
         paddingLeft: `${3 + (settings.marginLeft ?? 0)}mm`
       }} 
       dir="ltr"
+      onClick={() => { dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
     >
        
        {showPageActions && (
-         <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity no-print z-50">
-            {(state.mode === 'photos' || (state.mode === 'businesscard' && (layout === 'businesscard-form' || layout === 'businesscard-form-reverse'))) && (
+         <div className={cn(
+             "absolute top-2 right-2 flex gap-1 transition-opacity no-print z-50",
+             showLayoutMenu ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          )}>
+            {(state.mode === 'photos' || state.mode === 'businesscard') && (
               <Button 
                  onClick={() => setShowLayoutMenu(!showLayoutMenu)}
+                 onMouseDown={(e) => e.stopPropagation()}
                  variant="secondary"
                  size="icon"
                  className="h-8 w-8"
@@ -920,26 +1017,60 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
             {showLayoutMenu && state.mode === 'businesscard' && (
                 <div 
                   ref={menuRef}
-                  className="absolute top-full right-0 mt-2 rounded-xl shadow-xl border p-3 flex flex-col gap-2 w-48 z-50 animate-fade-in"
-                  style={{ backgroundColor: '#ffffff', borderColor: '#e4e4e7' }}
+                  className="absolute top-full right-0 mt-2 rounded-xl shadow-xl border p-3 flex flex-col gap-2 w-52 z-50 animate-fade-in bg-white"
+                  style={{ borderColor: '#e4e4e7' }}
                 >
+                    {/* Grid Layout */}
                     <button
                         onClick={() => handleLayoutItemClick('businesscard')}
-                        className="flex items-center gap-2 p-2 rounded-lg border-2 transition-all hover:bg-muted"
+                        className="flex items-center gap-2 p-2 rounded-lg border-2 transition-all hover:bg-muted w-full text-left"
                         style={{ 
-                            borderColor: layout === 'businesscard' || layout === 'businesscard-form' || layout === 'businesscard-form-reverse' ? '#18181b' : 'transparent',
-                            backgroundColor: layout === 'businesscard' || layout === 'businesscard-form' || layout === 'businesscard-form-reverse' ? 'rgba(24,24,27,0.05)' : 'transparent'
+                            borderColor: layout === 'businesscard' ? '#18181b' : 'transparent',
+                            backgroundColor: layout === 'businesscard' ? 'rgba(24,24,27,0.05)' : 'transparent'
                         }}
                     >
-                        <ArrowLeftRight size={14} />
-                        <span className="text-sm font-medium">
-                            {layout === 'businesscard' && t('card.gridLayout')}
-                            {layout === 'businesscard-form' && t('card.formLayout')}
-                            {layout === 'businesscard-form-reverse' && t('card.formLayoutReverse')}
-                            {layout !== 'businesscard' && layout !== 'businesscard-form' && layout !== 'businesscard-form-reverse' && t('card.gridLayout')}
-                        </span>
+                        <Grid size={14} />
+                        <span className="text-sm font-medium">{t('card.gridLayout')}</span>
+                    </button>
+
+                    {/* Form Layout */}
+                    <button
+                        onClick={() => handleLayoutItemClick('businesscard-form')}
+                        className="flex items-center gap-2 p-2 rounded-lg border-2 transition-all hover:bg-muted w-full text-left"
+                        style={{ 
+                            borderColor: layout === 'businesscard-form' ? '#18181b' : 'transparent',
+                            backgroundColor: layout === 'businesscard-form' ? 'rgba(24,24,27,0.05)' : 'transparent'
+                        }}
+                    >
+                        <FileText size={14} />
+                        <span className="text-sm font-medium">{t('card.formLayout')}</span>
+                    </button>
+
+                    {/* Form Layout Reverse */}
+                    <button
+                        onClick={() => handleLayoutItemClick('businesscard-form-reverse')}
+                        className="flex items-center gap-2 p-2 rounded-lg border-2 transition-all hover:bg-muted w-full text-left"
+                        style={{ 
+                            borderColor: layout === 'businesscard-form-reverse' ? '#18181b' : 'transparent',
+                            backgroundColor: layout === 'businesscard-form-reverse' ? 'rgba(24,24,27,0.05)' : 'transparent'
+                        }}
+                    >
+                        <FileText size={14} className="rotate-180" />
+                        <span className="text-sm font-medium">{t('card.formLayoutReverse')}</span>
                     </button>
                 </div>
+            )}
+
+            {onReset && (
+                <Button 
+                   onClick={onReset}
+                   variant="secondary"
+                   size="icon"
+                   className="h-8 w-8 hover:bg-muted"
+                   title={state.language === 'ku' ? 'ڕیسێتکردنی پەڕە' : 'Reset Page'}
+                >
+                    <RotateCcw size={16} />
+                </Button>
             )}
 
             <Button 
@@ -947,7 +1078,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                variant="secondary"
                size="icon"
                className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
-               title="Delete Page"
+               title={state.language === 'ku' ? 'سڕینەوەی پەڕە' : 'Delete Page'}
             >
                 <Trash2 size={16} />
             </Button>

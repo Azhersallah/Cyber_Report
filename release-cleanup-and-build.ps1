@@ -1,13 +1,13 @@
-# Release Cleanup and Build Script for Photo Printer Pro v1.0.3
-# This script uses GitHub CLI to manage releases and tags without requiring git
+# Read package.json version
+$packageJson = Get-Content -Raw -Path "package.json" | ConvertFrom-Json
+$version = $packageJson.version
+$tagName = "v$version"
 
 Write-Host "=== Photo Printer Pro Release Management ===" -ForegroundColor Cyan
-Write-Host "Version: 1.0.3" -ForegroundColor Green
+Write-Host "Version: $version" -ForegroundColor Green
 Write-Host ""
 
 $repo = "Azhersallah/photo-printer-pro"
-$version = "1.0.3"
-$tagName = "v$version"
 
 # Step 1: Delete all existing releases
 Write-Host "Step 1: Deleting all existing releases..." -ForegroundColor Yellow

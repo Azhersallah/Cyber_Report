@@ -63,14 +63,20 @@ let mainWindow;
 let fileToOpen = null;
 
 // ============================================
-// APP SETTINGS - JSON FILE
+// APP SETTINGS & TASKS - JSON FILE
 // ============================================
 
 const SETTINGS_FILE_NAME = 'settings.json';
+const TASKS_FILE_NAME = 'tasks.json';
 
 function getSettingsFilePath() {
   const userDataPath = app.getPath('userData');
   return path.join(userDataPath, SETTINGS_FILE_NAME);
+}
+
+function getTasksFilePath() {
+  const userDataPath = app.getPath('userData');
+  return path.join(userDataPath, TASKS_FILE_NAME);
 }
 
 function loadSettings() {
@@ -93,6 +99,30 @@ function saveSettings(settings) {
     return true;
   } catch (err) {
     console.error('Failed to save settings:', err);
+    return false;
+  }
+}
+
+function loadTasks() {
+  try {
+    const tasksPath = getTasksFilePath();
+    if (fs.existsSync(tasksPath)) {
+      const data = fs.readFileSync(tasksPath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error('Failed to load tasks:', err);
+  }
+  return [];
+}
+
+function saveTasks(tasks) {
+  try {
+    const tasksPath = getTasksFilePath();
+    fs.writeFileSync(tasksPath, JSON.stringify(tasks, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Failed to save tasks:', err);
     return false;
   }
 }
@@ -405,6 +435,7 @@ function createWindow() {
     height: windowHeight,
     frame: true,
     center: true,
+    show: false, // Hidden until ready-to-show fires — eliminates white flash
     icon: iconPath,
     webPreferences: {
       nodeIntegration: true,
@@ -429,7 +460,12 @@ function createWindow() {
     mainWindow.loadURL('pppro://app/index.html');
   }
 
-  mainWindow.maximize();
+  // Show window only when renderer is fully painted — no white flash
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.maximize();
+    mainWindow.show();
+  });
+
   mainWindow.on('closed', () => { mainWindow = null; });
 
   mainWindow.webContents.on('did-finish-load', () => {
@@ -584,6 +620,10 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 // Settings handlers - JSON file
 ipcMain.handle('load-settings', () => loadSettings());
 ipcMain.handle('save-settings', (event, settings) => saveSettings(settings));
+
+// Tasks handlers - JSON file
+ipcMain.handle('load-tasks', () => loadTasks());
+ipcMain.handle('save-tasks', (event, tasks) => saveTasks(tasks));
 
 // User activity tracking (scroll, click, keypress, mouse move)
 // Note: Activity tracking now handled via WebSocket connection
@@ -843,6 +883,11 @@ ipcMain.handle('save-project-as', async (event, { content, defaultName }) => {
 ipcMain.handle('get-current-project-path', () => currentProjectPath);
 ipcMain.handle('set-current-project-path', (event, filePath) => { currentProjectPath = filePath; return true; });
 ipcMain.handle('set-window-title', (event, title) => { if (mainWindow) mainWindow.setTitle(title); return true; });
+
+ipcMain.handle('open-dropped-project', async (event, filePath) => {
+  if (filePath) openProjectFile(filePath);
+  return true;
+});
 
 ipcMain.handle('open-project-dialog', async () => {
   const licenseCheck = requireLicense();
@@ -1130,6 +1175,598 @@ ipcMain.handle('verify-license-state', async () => {
   return { valid: true };
 });
 
+const http = require('http');
+let transferServer = null;
+let transferServerPort = 0;
+
+function getLocalIP() {
+  const os = require('os');
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
+function getMobileUploadPage() {
+  return `<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Photo Printer Pro</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600&display=swap');
+    :root {
+      --background: 240 10% 3.9%;
+      --foreground: 0 0% 98%;
+      --card: 240 10% 3.9%;
+      --card-foreground: 0 0% 98%;
+      --primary: 0 0% 98%;
+      --primary-foreground: 240 5.9% 10%;
+      --secondary: 240 3.7% 15.9%;
+      --secondary-foreground: 0 0% 98%;
+      --muted: 240 3.7% 15.9%;
+      --muted-foreground: 240 5% 64.9%;
+      --accent: 240 3.7% 15.9%;
+      --accent-foreground: 0 0% 98%;
+      --destructive: 0 62.8% 30.6%;
+      --destructive-foreground: 0 0% 98%;
+      --border: 240 3.7% 15.9%;
+      --input: 240 3.7% 15.9%;
+      --radius: 0.5rem;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Kufi Arabic', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: hsl(var(--background));
+      color: hsl(var(--foreground));
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 2rem 1rem;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      width: 100%;
+      max-width: 28rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+    
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 0.5rem;
+    }
+    .icon-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 3.5rem;
+      height: 3.5rem;
+      border-radius: 0.75rem;
+      background-color: hsl(var(--secondary));
+      border: 1px solid hsl(var(--border));
+      margin-bottom: 0.5rem;
+    }
+    .icon-container svg { width: 1.75rem; height: 1.75rem; stroke: hsl(var(--foreground)); }
+    .title { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.025em; }
+    .subtitle { font-size: 0.875rem; color: hsl(var(--muted-foreground)); }
+
+    .card {
+      background-color: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: var(--radius);
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+    }
+    .card-header {
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+    .card-title { font-size: 0.875rem; font-weight: 600; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: hsl(var(--muted-foreground));
+      background-color: hsl(var(--secondary));
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+    }
+    .status-dot { width: 0.375rem; height: 0.375rem; background-color: #10b981; border-radius: 50%; }
+
+    .card-content {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .upload-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2.5rem 1rem;
+      border: 1px dashed hsl(var(--border));
+      border-radius: var(--radius);
+      background-color: transparent;
+      cursor: pointer;
+      position: relative;
+      transition: background-color 0.2s, border-color 0.2s;
+      text-align: center;
+    }
+    .upload-area:active { background-color: hsl(var(--muted) / 0.5); }
+    .upload-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .upload-icon {
+      width: 2.5rem; height: 2.5rem; color: hsl(var(--muted-foreground)); margin-bottom: 0.75rem;
+    }
+    .upload-text { font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem; color: hsl(var(--foreground)); }
+    .upload-subtext { font-size: 0.75rem; color: hsl(var(--muted-foreground)); }
+
+    .preview-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;
+    }
+    .preview-item {
+      position: relative; aspect-ratio: 1;
+      border-radius: calc(var(--radius) - 2px);
+      border: 1px solid hsl(var(--border));
+      overflow: hidden; background-color: hsl(var(--muted));
+    }
+    .preview-item img { width: 100%; height: 100%; object-fit: cover; }
+    .remove-btn {
+      position: absolute; top: 0.25rem; left: 0.25rem;
+      width: 1.5rem; height: 1.5rem;
+      background-color: hsl(var(--background) / 0.8);
+      backdrop-filter: blur(4px);
+      border: 1px solid hsl(var(--border));
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      color: hsl(var(--foreground)); cursor: pointer; transition: 0.2s; z-index: 10;
+    }
+    .remove-btn:active { background-color: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); border-color: hsl(var(--destructive)); }
+
+    .action-bar { display: flex; gap: 0.75rem; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: calc(var(--radius) - 2px);
+      font-size: 0.875rem; font-weight: 500; height: 2.5rem; padding: 0 1rem;
+      transition: opacity 0.2s, background-color 0.2s;
+      cursor: pointer; outline: none; border: none; white-space: nowrap;
+      font-family: inherit; gap: 0.5rem;
+    }
+    .btn-full { flex: 1; }
+    .btn:disabled { opacity: 0.5; pointer-events: none; }
+    .btn-primary { background-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+    .btn-primary:active { opacity: 0.9; }
+    .btn-outline { border: 1px solid hsl(var(--input)); background-color: transparent; color: hsl(var(--foreground)); }
+    .btn-outline:active { background-color: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
+
+    .progress-container { display: flex; flex-direction: column; gap: 0.5rem; display: none; }
+    .progress-container.active { display: flex; }
+    .progress-bar { width: 100%; height: 0.5rem; background-color: hsl(var(--secondary)); border-radius: 9999px; overflow: hidden; }
+    .progress-fill { height: 100%; background-color: hsl(var(--primary)); width: 0%; transition: width 0.3s ease; }
+    .counter { text-align: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); }
+
+    .alert { 
+      display: none; padding: 1rem; border-radius: var(--radius); border: 1px solid hsl(var(--border)); 
+      background-color: hsl(var(--card)); align-items: flex-start; gap: 0.75rem; 
+    }
+    .alert.show { display: flex; }
+    .alert-icon { color: hsl(var(--foreground)); width: 1.25rem; height: 1.25rem; flex-shrink: 0; }
+    .alert-icon.success { color: #10b981; }
+    .alert-icon.error { color: hsl(var(--destructive)); }
+    .alert-content { display: flex; flex-direction: column; gap: 0.25rem; }
+    .alert-title { font-weight: 500; font-size: 0.875rem; line-height: 1.25rem; }
+    .alert-desc { font-size: 0.875rem; line-height: 1.25rem; color: hsl(var(--muted-foreground)); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    
+    <!-- Header -->
+    <div class="header">
+      <div class="icon-container">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+      </div>
+      <h1 class="title">ناردنی وێنە</h1>
+      <p class="subtitle">لە مۆبایلەکەتەوە وێنە بنێرە بۆ ناو بەرنامەکە</p>
+    </div>
+
+    <!-- Alert -->
+    <div id="alertBox" class="alert">
+      <div id="alertIcon" class="alert-icon"></div>
+      <div class="alert-content">
+        <div id="alertTitle" class="alert-title"></div>
+        <div id="alertDesc" class="alert-desc"></div>
+      </div>
+    </div>
+
+    <!-- Card -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">هەڵبژاردنی وێنەکان</h2>
+        <div class="status-badge">
+          <div class="status-dot"></div>
+          پەیوەندیدارە
+        </div>
+      </div>
+
+      <div class="card-content">
+        <div class="upload-area" id="dropZone">
+          <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <div class="upload-text">لێرە دابگرە بۆ هەڵبژاردنی وێنە</div>
+          <div class="upload-subtext">هەموو جۆرە وێنەیەک پشتگیری دەکرێت</div>
+          <input type="file" id="fileInput" accept="image/*" multiple />
+        </div>
+
+        <div class="preview-grid" id="previewGrid" style="display:none;"></div>
+        
+        <div class="progress-container" id="progressContainer">
+          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="counter" id="counter"></div>
+        </div>
+
+        <div class="action-bar">
+          <button class="btn btn-outline" id="clearBtn" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+          </button>
+          <button class="btn btn-primary btn-full" id="sendBtn" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+            <span id="sendBtnText">ناردن</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const previewGrid = document.getElementById('previewGrid');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const sendBtnText = document.getElementById('sendBtnText');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressFill = document.getElementById('progressFill');
+    const counter = document.getElementById('counter');
+    const alertBox = document.getElementById('alertBox');
+    const alertIcon = document.getElementById('alertIcon');
+    const alertTitle = document.getElementById('alertTitle');
+    const alertDesc = document.getElementById('alertDesc');
+    
+    let selectedFiles = [];
+    
+    fileInput.addEventListener('change', (e) => {
+      Array.from(e.target.files).forEach(file => {
+        if (file.type.startsWith('image/')) { selectedFiles.push(file); addPreview(file, selectedFiles.length - 1); }
+      });
+      updateUI(); fileInput.value = '';
+    });
+    
+    clearBtn.addEventListener('click', () => {
+      selectedFiles = [];
+      previewGrid.innerHTML = '';
+      updateUI();
+    });
+
+    function addPreview(file, index) {
+      const div = document.createElement('div'); div.className = 'preview-item'; div.dataset.index = index;
+      const img = document.createElement('img'); const url = URL.createObjectURL(file); img.src = url; img.onload = () => URL.revokeObjectURL(url);
+      const removeBtn = document.createElement('button'); removeBtn.className = 'remove-btn'; 
+      removeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>';
+      removeBtn.onclick = (e) => { e.stopPropagation(); selectedFiles[index] = null; div.remove(); updateUI(); };
+      div.appendChild(img); div.appendChild(removeBtn); previewGrid.appendChild(div);
+    }
+
+    function updateUI() {
+      const count = selectedFiles.filter(f => f !== null).length;
+      const canSend = count > 0;
+      sendBtn.disabled = !canSend;
+      clearBtn.disabled = !canSend;
+      previewGrid.style.display = canSend ? 'grid' : 'none';
+      sendBtnText.textContent = canSend ? 'ناردنی ' + count + ' وێنە' : 'ناردن';
+      alertBox.className = 'alert';
+    }
+
+    function showAlert(type, title, desc) {
+      alertBox.className = 'alert show';
+      alertTitle.textContent = title;
+      alertDesc.textContent = desc;
+      if (type === 'success') {
+        alertIcon.className = 'alert-icon success';
+        alertIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
+      } else {
+        alertIcon.className = 'alert-icon error';
+        alertIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>';
+      }
+    }
+
+    sendBtn.addEventListener('click', async () => {
+      const validFiles = selectedFiles.filter(f => f !== null);
+      if (validFiles.length === 0) return;
+      
+      sendBtn.disabled = true; clearBtn.disabled = true;
+      progressContainer.classList.add('active');
+      alertBox.className = 'alert';
+      
+      let sent = 0;
+      for (const file of validFiles) {
+        try {
+          const formData = new FormData(); formData.append('photo', file);
+          const resp = await fetch('/upload', { method: 'POST', body: formData });
+          if (resp.ok) sent++;
+          progressFill.style.width = Math.round((sent / validFiles.length) * 100) + '%';
+          counter.textContent = sent + ' / ' + validFiles.length;
+        } catch (err) { console.error('Upload error:', err); }
+      }
+      
+      if (sent > 0) {
+        showAlert('success', 'سەرکەوتوو بوو', sent + ' وێنە بە سەرکەوتوویی نێردرا بۆ بەرنامەکە.');
+        selectedFiles = []; previewGrid.innerHTML = '';
+      } else {
+        showAlert('error', 'هەڵە ڕوویدا', 'نەتوانرا وێنەکان بنێردرێت.');
+      }
+      
+      setTimeout(() => {
+        updateUI();
+        progressContainer.classList.remove('active'); progressFill.style.width = '0%';
+        counter.textContent = '';
+      }, 3000);
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function createTransferServer(mode, savePath) {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+      if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(getMobileUploadPage());
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/upload') {
+        const chunks = []; let totalSize = 0;
+        const MAX_SIZE = 50 * 1024 * 1024;
+        req.on('data', (chunk) => {
+          totalSize += chunk.length;
+          if (totalSize > MAX_SIZE) { res.writeHead(413, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'File too large' })); req.destroy(); return; }
+          chunks.push(chunk);
+        });
+        req.on('end', () => {
+          try {
+            const body = Buffer.concat(chunks);
+            const contentType = req.headers['content-type'] || '';
+            if (contentType.includes('multipart/form-data')) {
+              const boundary = contentType.split('boundary=')[1];
+              if (!boundary) { res.writeHead(400); res.end(JSON.stringify({ error: 'No boundary' })); return; }
+              const parts = parseMultipart(body, boundary);
+              if (parts.length > 0) {
+                const part = parts[0];
+                const fileName = part.filename || 'photo_' + Date.now() + '.jpg';
+                if (mode === 'folder' && savePath) {
+                  const fs = require('fs');
+                  const path = require('path');
+                  fs.writeFileSync(path.join(savePath, fileName), part.data);
+                  if (mainWindow && mainWindow.webContents) {
+                    mainWindow.webContents.send('wireless-photo-received', { name: fileName, folder: true });
+                  }
+                } else {
+                  const base64 = part.data.toString('base64');
+                  const mimeType = part.contentType || 'image/jpeg';
+                  const dataUrl = 'data:' + mimeType + ';base64,' + base64;
+                  if (mainWindow && mainWindow.webContents) {
+                    mainWindow.webContents.send('wireless-photo-received', { src: dataUrl, name: fileName });
+                  }
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, name: fileName }));
+              } else { res.writeHead(400); res.end(JSON.stringify({ error: 'No file found' })); }
+            } else { res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid content type' })); }
+          } catch (err) { console.error('[Transfer] Upload error:', err); res.writeHead(500); res.end(JSON.stringify({ error: 'Server error' })); }
+        });
+        return;
+      }
+      res.writeHead(404); res.end('Not Found');
+    });
+    let port = 8847;
+    const tryListen = () => {
+      server.listen(port, '0.0.0.0', () => {
+        transferServer = server; transferServerPort = port;
+        console.log('[Transfer] Server running on port ' + port);
+        resolve({ port, ip: getLocalIP() });
+      });
+      server.once('error', (err) => {
+        if (err.code === 'EADDRINUSE') { port++; if (port > 8900) reject(new Error('No available port')); else tryListen(); }
+        else reject(err);
+      });
+    };
+    tryListen();
+  });
+}
+
+function parseMultipart(body, boundary) {
+  const parts = [];
+  const boundaryBuffer = Buffer.from('--' + boundary);
+  let idx = body.indexOf(boundaryBuffer, 0);
+  while (idx !== -1) {
+    const nextIdx = body.indexOf(boundaryBuffer, idx + boundaryBuffer.length);
+    if (nextIdx === -1) break;
+    const partData = body.slice(idx + boundaryBuffer.length, nextIdx);
+    let partStart = 0;
+    if (partData[0] === 0x0d && partData[1] === 0x0a) partStart = 2;
+    const headerEnd = partData.indexOf('\r\n\r\n', partStart);
+    if (headerEnd === -1) { idx = nextIdx; continue; }
+    const headerStr = partData.slice(partStart, headerEnd).toString('utf8');
+    let fileData = partData.slice(headerEnd + 4);
+    if (fileData.length >= 2 && fileData[fileData.length - 2] === 0x0d && fileData[fileData.length - 1] === 0x0a) {
+      fileData = fileData.slice(0, fileData.length - 2);
+    }
+    let filename = null; let ct = 'application/octet-stream';
+    for (const line of headerStr.split('\r\n')) {
+      if (line.toLowerCase().startsWith('content-disposition:')) { const m = line.match(/filename=\"([^\"]+)\"/i); if (m) filename = m[1]; }
+      if (line.toLowerCase().startsWith('content-type:')) { ct = line.split(':')[1].trim(); }
+    }
+    if (filename) parts.push({ filename, contentType: ct, data: fileData });
+    idx = nextIdx;
+  }
+  return parts;
+}
+
+function stopTransferServer() {
+  return new Promise((resolve) => {
+    if (transferServer) {
+      transferServer.close(() => { transferServer = null; transferServerPort = 0; console.log('[Transfer] Server stopped'); resolve(true); });
+    } else { resolve(true); }
+  });
+}
+
+ipcMain.handle('start-transfer-server', async (event, args) => {
+  try {
+    const mode = args?.mode || 'app';
+    const savePath = args?.savePath || '';
+    if (transferServer) { return { success: true, ip: getLocalIP(), port: transferServerPort }; }
+    const result = await createTransferServer(mode, savePath);
+    return { success: true, ip: result.ip, port: result.port };
+  } catch (err) {
+    console.error('[Transfer] Failed to start server:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('stop-transfer-server', async () => {
+  await stopTransferServer();
+  return { success: true };
+});
+
+ipcMain.handle('start-hotspot', async () => {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    const psScript = `
+      Add-Type -AssemblyName System.Runtime.WindowsRuntime
+      $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
+      function Await($WinRtTask, $ResultType) {
+          $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+          $netTask = $asTask.Invoke($null, @($WinRtTask))
+          $netTask.Wait(-1) | Out-Null
+          $netTask.Result
+      }
+      [Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime] | Out-Null
+      $connectionProfile = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
+      if ($connectionProfile -eq $null) {
+          $profiles = [Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles()
+          foreach ($p in $profiles) {
+              if ($p.IsWlanConnectionProfile) {
+                  $connectionProfile = $p
+                  break
+              }
+          }
+      }
+      if ($connectionProfile -eq $null) { Write-Host "ERROR:NO_PROFILE"; exit 1 }
+      try {
+          $tetheringManager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($connectionProfile)
+          $config = $tetheringManager.GetCurrentAccessPointConfiguration()
+          $startResult = Await $tetheringManager.StartTetheringAsync() ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
+          Start-Sleep -Seconds 3
+          $hotspotIP = "Unknown"
+          $adapters = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -like '*Local Area Connection*' -or $_.InterfaceAlias -like '*Hotspot*' -or $_.InterfaceAlias -match 'Direct' }
+          foreach ($adapter in $adapters) {
+              if ($adapter.IPAddress -like '192.168.137.*') {
+                  $hotspotIP = $adapter.IPAddress
+              }
+          }
+          Write-Host "SUCCESS:SSID:$($config.Ssid)|PASS:$($config.Passphrase)|IP:$hotspotIP"
+      } catch {
+          Write-Host "ERROR:$($_.Exception.Message)"
+      }
+    `;
+    const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+    exec(`powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand ${encoded}`, (error, stdout, stderr) => {
+      const output = stdout.toString().trim();
+      if (output.includes("SUCCESS:")) {
+        const parts = output.replace("SUCCESS:", "").split("|");
+        const data = {};
+        parts.forEach(p => {
+          const [k, v] = p.split(":");
+          if (k === 'SSID') data.ssid = v;
+          if (k === 'PASS') data.passphrase = v;
+          if (k === 'IP') data.ip = v;
+        });
+        resolve({ success: true, ...data });
+      } else {
+        resolve({ success: false, error: output || stderr || (error && error.message) || 'Unknown error' });
+      }
+    });
+  });
+});
+
+ipcMain.handle('stop-hotspot', async () => {
+  return new Promise((resolve) => {
+    const { exec } = require('child_process');
+    const psScript = `
+      Add-Type -AssemblyName System.Runtime.WindowsRuntime
+      $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
+      function Await($WinRtTask, $ResultType) {
+          $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+          $netTask = $asTask.Invoke($null, @($WinRtTask))
+          $netTask.Wait(-1) | Out-Null
+          $netTask.Result
+      }
+      [Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime] | Out-Null
+      $connectionProfile = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
+      if ($connectionProfile -eq $null) {
+          $profiles = [Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles()
+          foreach ($p in $profiles) {
+              if ($p.IsWlanConnectionProfile) {
+                  $connectionProfile = $p
+                  break
+              }
+          }
+      }
+      if ($connectionProfile -ne $null) {
+          $tetheringManager = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($connectionProfile)
+          Await $tetheringManager.StopTetheringAsync() ([Windows.Networking.NetworkOperators.NetworkOperatorTetheringOperationResult])
+      }
+      Write-Host "STOPPED"
+    `;
+    const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+    exec(`powershell -ExecutionPolicy Bypass -NoProfile -EncodedCommand ${encoded}`, () => {
+      resolve({ success: true });
+    });
+  });
+});
+
+ipcMain.handle('select-folder', async () => {
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+  return result.filePaths[0] || null;
+});
+
+ipcMain.handle('get-local-ip', () => {
+  return { ip: getLocalIP(), port: transferServerPort };
+});
+
 // ============================================
 // APP LIFECYCLE
 // ============================================
@@ -1206,12 +1843,14 @@ app.whenReady().then(() => {
 app.on('window-all-closed', async () => {
   trialManager.stopSession();
   await stopHeartbeat();
+  await stopTransferServer();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', async () => {
   trialManager.stopSession();
   await stopHeartbeat();
+  await stopTransferServer();
 });
 
 app.on('activate', () => {

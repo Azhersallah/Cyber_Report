@@ -136,6 +136,10 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   };
 
   const handleReplaceClick = (e: React.MouseEvent) => {
+    if (state.mode === 'businesscard') {
+      // Let it bubble up to select the card slot, don't open file picker
+      return;
+    }
     e.stopPropagation();
     fileInputRef.current?.click();
   };
@@ -431,21 +435,27 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
           )}
 
           {!photo ? (
-             <div 
-                className={cn(
-                    "w-full h-full flex flex-col items-center justify-center transition-all cursor-pointer overflow-hidden group/empty relative bg-white print:border-white",
-                    roundingClass,
-                    isDragOver ? "bg-muted" : ""
-                )}
-                onClick={handleReplaceClick}
-             >
-                <div className="flex flex-col items-center gap-1.5 text-muted-foreground transition-colors no-print">
-                    <div className={cn(
-                        "w-10 h-10 rounded-md flex items-center justify-center transition-all border",
-                        isDragOver 
-                            ? "bg-foreground/10 text-foreground border-foreground/20" 
-                            : "bg-muted text-muted-foreground border-transparent group-hover/empty:text-foreground group-hover/empty:bg-foreground/5"
-                    )}>
+              <div 
+                 className={cn(
+                     "w-full h-full flex flex-col items-center justify-center transition-all cursor-pointer overflow-hidden group/empty relative bg-white print:border-white",
+                     roundingClass,
+                     isDragOver ? "bg-muted" : ""
+                 )}
+                 onClick={handleReplaceClick}
+              >
+                 <div className="flex flex-col items-center gap-1.5 text-muted-foreground transition-colors no-print">
+                    <div 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                        }}
+                        className={cn(
+                            "w-10 h-10 rounded-md flex items-center justify-center transition-all border cursor-pointer",
+                            isDragOver 
+                                ? "bg-foreground/10 text-foreground border-foreground/20" 
+                                : "bg-muted text-muted-foreground border-transparent group-hover/empty:text-foreground group-hover/empty:bg-foreground/5"
+                        )}
+                    >
                         <Plus size={20} />
                     </div>
                     

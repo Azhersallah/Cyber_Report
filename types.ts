@@ -1,7 +1,7 @@
 
 export type LayoutType = '1' | '2' | '2col' | '4' | '2text' | '1text' | '1text-side' | 'onlytext' | 'businesscard' | 'businesscard-form' | 'businesscard-form-reverse' | 'invoice' | 'invoice-1' | 'invoice-4' | 'idphoto' | 'idphoto-1' | 'idphoto-2' | 'idphoto-4';
 
-export type AppMode = 'photos' | 'businesscard' | 'invoice' | 'idphoto' | 'resume' | 'envelope';
+export type AppMode = 'photos' | 'businesscard' | 'invoice' | 'idphoto' | 'resume' | 'envelope' | 'qrcode' | 'tasks' | 'stickers';
 
 // Business Card Builder Types
 export interface BusinessCardData {
@@ -64,6 +64,29 @@ export interface CropData {
   height: number; // Percentage
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  notes: string;
+  reminderTime: string | null; // ISO string
+  isCompleted: boolean;
+  notified: boolean;
+  createdAt: string;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  color?: string;
+  createdAt: string;
+}
+
+export interface TasksDataPayload {
+  tasks: Task[];
+  notes: Note[];
+}
+
 export interface Photo {
   id: string;
   src: string;
@@ -103,6 +126,9 @@ export interface AppSettings {
   // Auto Save Settings
   autoSaveEnabled: boolean;
   autoSaveInterval: number; // in minutes
+
+  // Auto Export to Word Settings
+  autoExportWord: boolean; // If true, automatically export to Word when saving in Photos mode
 
   // AI Settings
   geminiApiKey: string;
@@ -147,6 +173,7 @@ export interface AppState {
   pageLayouts: Record<number, LayoutType>;
   currentSectionIndex: number;
   manualPageCount: number; // Tracks explicitly added pages
+  selectedPageIndex: number | null; // Added for active page layout changes
   // Resume Builder State
   resumeData: ResumeData;
   selectedResumeTemplate: string;
@@ -158,6 +185,11 @@ export interface AppState {
   businessCardCustomization: Record<string, CustomizationOptions>;
   businessCardDesignMode: boolean;
   businessCardLanguage: Language; // Separate language for business card content
+  // Selected Card for Custom Size / Layout Editing
+  selectedBusinessCardIndex: number | null;
+  businessCardSizes: Record<number, { width: number; height: number; hidden?: boolean }>;
+  // QR Code Generator State
+  qrCodeData: QRCodeData;
 }
 
 // Resume Builder Types
@@ -251,6 +283,28 @@ export interface CustomizationOptions {
   logoSizeBack?: number; // Back side logo size
 }
 
+// QR Code Generator Types
+export interface QRCodeData {
+  type: 'text' | 'url' | 'email' | 'phone' | 'sms' | 'wifi' | 'location';
+  content: string;
+  // WiFi specific
+  wifiSSID: string;
+  wifiPassword: string;
+  wifiSecurity: 'WPA' | 'WEP' | 'nopass';
+  wifiHidden: boolean;
+  // Location specific
+  latitude: string;
+  longitude: string;
+  // Customization
+  size: number;
+  fgColor: string;
+  bgColor: string;
+  includeMargin: boolean;
+  errorLevel: 'L' | 'M' | 'Q' | 'H';
+  logoImage: string | null;
+  logoSize: number;
+}
+
 export const INITIAL_SETTINGS: AppSettings = {
   userName: 'User Name',
   logo: null,
@@ -265,7 +319,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   showPhotoBadges: true,
   defaultTitleFontSize: 22,
   defaultTextFontSize: 20,
-  defaultFontFamily: 'Inter', // Default font
+  defaultFontFamily: 'Noto Naskh Arabic', // Default font
   footerDate: (() => {
     const date = new Date();
     const day = String(date.getDate()).padStart(2, '0');
@@ -285,6 +339,9 @@ export const INITIAL_SETTINGS: AppSettings = {
   // Auto Save Settings
   autoSaveEnabled: false,
   autoSaveInterval: 5, // 5 minutes default
+
+  // Auto Export to Word Settings
+  autoExportWord: true, // Default enabled - automatically export to Word when saving in Photos mode
 
   // AI Settings
   geminiApiKey: '',

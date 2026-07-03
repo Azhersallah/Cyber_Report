@@ -33,6 +33,25 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
   const { showToast } = useToast();
   const t = (key: string) => getTranslation(key, state.language);
   const [showSettings, setShowSettings] = useState(false);
+  const [seenNewFeatures, setSeenNewFeatures] = useState<{
+    tasks: boolean;
+    stickers: boolean;
+    qrcode: boolean;
+  }>(() => {
+    return {
+      tasks: localStorage.getItem('seen_feature_tasks_v2') === 'true',
+      stickers: localStorage.getItem('seen_feature_stickers_v2') === 'true',
+      qrcode: localStorage.getItem('seen_feature_qrcode_v2') === 'true',
+    };
+  });
+
+  // Automatically mark active mode as seen
+  useEffect(() => {
+    if (['tasks', 'stickers', 'qrcode'].includes(state.mode)) {
+      localStorage.setItem(`seen_feature_${state.mode}`, 'true');
+      setSeenNewFeatures(prev => ({ ...prev, [state.mode]: true }));
+    }
+  }, [state.mode]);
   const [activeTab, setActiveTab] = useState<'general' | 'visibility' | 'branding'>('general');
   const settingsRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -272,6 +291,9 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
     { id: 'invoice', label: t('nav.invoice') },
     { id: 'idphoto', label: t('nav.idphoto') },
     { id: 'resume', label: t('nav.resume') },
+    { id: 'qrcode', label: t('nav.qrcode') },
+    { id: 'stickers', label: t('nav.stickers') },
+    { id: 'tasks', label: t('nav.tasks') },
     { id: 'envelope', label: t('nav.envelope'), disabled: true },
   ];
 
@@ -334,6 +356,38 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
           if (result.success) {
             setCurrentFilePath(result.filePath);
             showToast(t('toast.saved'), 'success');
+            
+            // If autoExportWord is enabled, in Photos mode, and has photos, also export to Word
+            if (state.settings.autoExportWord && state.mode === 'photos' && state.photos.length > 0) {
+              try {
+                const { exportPhotosToWord } = await import('../../utils/exportToWord');
+                const wordBlob = await exportPhotosToWord(state);
+                
+                // Get the directory and base name from the saved .pppro file
+                const ppproPath = result.filePath;
+                const lastSlash = Math.max(ppproPath.lastIndexOf('/'), ppproPath.lastIndexOf('\\'));
+                const directory = ppproPath.substring(0, lastSlash);
+                const fileName = ppproPath.substring(lastSlash + 1).replace('.pppro', '');
+                const wordPath = `${directory}\\${fileName}.docx`;
+                
+                // Convert blob to buffer and save
+                const arrayBuffer = await wordBlob.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+                
+                const fs = (window as any).require('fs');
+                fs.writeFileSync(wordPath, buffer);
+                
+                showToast(
+                  state.language === 'ku' 
+                    ? 'هەردوو فایلەکە سەیڤ کران (.pppro و .docx)'
+                    : 'Both files saved (.pppro and .docx)',
+                  'success'
+                );
+              } catch (wordErr) {
+                console.error('Word export failed:', wordErr);
+                // Don't show error, the main .pppro file was saved successfully
+              }
+            }
           } else {
             console.error('Save failed:', result.error);
             showToast(t('toast.saveFailed') + ': ' + (result.error || 'Unknown error'), 'error');
@@ -377,6 +431,38 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
             if (result.success) {
               setCurrentFilePath(result.filePath);
               showToast(t('toast.saved'), 'success');
+              
+              // If autoExportWord is enabled, in Photos mode, and has photos, also export to Word
+              if (state.settings.autoExportWord && state.mode === 'photos' && state.photos.length > 0) {
+                try {
+                  const { exportPhotosToWord } = await import('../../utils/exportToWord');
+                  const wordBlob = await exportPhotosToWord(state);
+                  
+                  // Get the directory and base name from the saved .pppro file
+                  const ppproPath = result.filePath;
+                  const lastSlash = Math.max(ppproPath.lastIndexOf('/'), ppproPath.lastIndexOf('\\'));
+                  const directory = ppproPath.substring(0, lastSlash);
+                  const fileName = ppproPath.substring(lastSlash + 1).replace('.pppro', '');
+                  const wordPath = `${directory}\\${fileName}.docx`;
+                  
+                  // Convert blob to buffer and save
+                  const arrayBuffer = await wordBlob.arrayBuffer();
+                  const buffer = Buffer.from(arrayBuffer);
+                  
+                  const fs = (window as any).require('fs');
+                  fs.writeFileSync(wordPath, buffer);
+                  
+                  showToast(
+                    state.language === 'ku' 
+                      ? 'هەردوو فایلەکە سەیڤ کران (.pppro و .docx)'
+                      : 'Both files saved (.pppro and .docx)',
+                    'success'
+                  );
+                } catch (wordErr) {
+                  console.error('Word export failed:', wordErr);
+                  // Don't show error, the main .pppro file was saved successfully
+                }
+              }
             } else if (!result.canceled) {
               showToast(t('toast.saveFailed'), 'error');
             }
@@ -390,7 +476,32 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
             link.download = `project-${date}.pppro`;
             link.click();
             URL.revokeObjectURL(url);
-            showToast(t('toast.saved'), 'success');
+            
+            // If autoExportWord is enabled, in Photos mode, and has photos, also export to Word
+            if (state.settings.autoExportWord && state.mode === 'photos' && state.photos.length > 0) {
+              try {
+                const { exportPhotosToWord } = await import('../../utils/exportToWord');
+                const wordBlob = await exportPhotosToWord(state);
+                const wordUrl = URL.createObjectURL(wordBlob);
+                const wordLink = document.createElement('a');
+                wordLink.href = wordUrl;
+                wordLink.download = `project-${date}.docx`;
+                wordLink.click();
+                URL.revokeObjectURL(wordUrl);
+                
+                showToast(
+                  state.language === 'ku' 
+                    ? 'هەردوو فایلەکە دابەزێنران (.pppro و .docx)'
+                    : 'Both files downloaded (.pppro and .docx)',
+                  'success'
+                );
+              } catch (wordErr) {
+                console.error('Word export failed:', wordErr);
+                showToast(t('toast.saved'), 'success');
+              }
+            } else {
+              showToast(t('toast.saved'), 'success');
+            }
           }
       } catch (err) {
           showToast(t('toast.saveFailed'), 'error');
@@ -753,6 +864,25 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
                                         </div>
                                     )}
                                 </div>
+                                
+                                {/* Auto Export to Word */}
+                                <div className="p-3 rounded-md border border-border space-y-3">
+                                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                        <Download size={12} /> {state.language === 'ku' ? 'ئێکسپۆرتی خۆکار بۆ Word' : 'Auto Export to Word'}
+                                    </label>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <span className="text-sm font-medium">{state.language === 'ku' ? 'چالاککردنی ئێکسپۆرتی Word' : 'Enable Word Export'}</span>
+                                            <p className="text-[10px] text-muted-foreground">{state.language === 'ku' ? 'لە کاتی سەیڤ کردن لە مۆدی فۆتۆ، فایلی Word دروست دەکات' : 'Auto-export to Word document when saving in Photos mode'}</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => dispatch({ type: 'UPDATE_SETTINGS', payload: { autoExportWord: !state.settings.autoExportWord } })}
+                                            className={`w-10 h-6 rounded-full transition-all ${state.settings.autoExportWord ? 'bg-foreground' : 'bg-muted'}`}
+                                        >
+                                            <div className={`w-4 h-4 rounded-full bg-background shadow-sm transition-transform mx-1 ${state.settings.autoExportWord ? (state.language === 'ku' ? '-translate-x-4' : 'translate-x-4') : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -826,7 +956,7 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
                                                 <Input 
                                                     type="text" 
                                                     inputMode="numeric"
-                                                    value={state.settings[`margin${side.charAt(0).toUpperCase() + side.slice(1)}` as keyof typeof state.settings] ?? 0} 
+                                                    value={(state.settings[`margin${side.charAt(0).toUpperCase() + side.slice(1)}` as keyof typeof state.settings] as any) ?? 0} 
                                                     onChange={(e) => {
                                                         const normalized = normalizeNumber(e.target.value);
                                                         const num = parseInt(normalized) || 0;
