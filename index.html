@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Photo Printer Pro - Untitled</title>
+    <title>Photo Printer Free - Untitled</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="apple-touch-icon" href="./favicon.svg" />
     
@@ -606,25 +606,6 @@
 </head>
   <body class="bg-background text-foreground antialiased font-sans">
     <div id="root"></div>
-    <!-- Polyfill for face-api.js in Electron -->
-    <script>
-      if (typeof window !== 'undefined' && !window.TextEncoder) {
-        window.TextEncoder = class TextEncoder {
-          encode(str) {
-            const arr = new Uint8Array(str.length);
-            for (let i = 0; i < str.length; i++) arr[i] = str.charCodeAt(i);
-            return arr;
-          }
-        };
-      }
-      if (typeof window !== 'undefined' && !window.TextDecoder) {
-        window.TextDecoder = class TextDecoder {
-          decode(arr) {
-            return String.fromCharCode.apply(null, arr);
-          }
-        };
-      }
-    </script>
     <!-- Standard Vite entry point -->
     <script type="module" src="/index.tsx"></script>
   </body>

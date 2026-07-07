@@ -90,11 +90,63 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDraggingOverlay, setIsDraggingOverlay] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [showSelectExistingDialog, setShowSelectExistingDialog] = useState(false);
   const [pendingPhoto, setPendingPhoto] = useState<Photo | null>(null);
   const [copyCount, setCopyCount] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  const isBusinessCardSlot = state.mode === 'businesscard';
+  const isMultiCopySlot = isIdPhotoSlot || isBusinessCardSlot;
+
+  const uniquePhotos = isIdPhotoSlot 
+    ? state.idPhotos.filter((p): p is Photo => p !== null)
+        .filter((value, index, self) => self.findIndex(t => t.src === value.src) === index)
+    : isBusinessCardSlot
+    ? state.cardPhotos.filter((p): p is Photo => p !== null)
+        .filter((value, index, self) => self.findIndex(t => t.src === value.src) === index)
+    : [];
+
+  const maxCopiesVal = isBusinessCardSlot ? 10 : maxCopies;
+
+  const getCopyDialogTitle = () => {
+    if (isBusinessCardSlot) {
+      return state.language === 'ku' ? 'زیادکردنی کۆپی کارت' : state.language === 'ar' ? 'إضافة نسخ البطاقة' : 'Add Card Copies';
+    }
+    return t('idphoto.copyDialog.title');
+  };
+
+  const getCopyDialogDescription = () => {
+    if (isBusinessCardSlot) {
+      return state.language === 'ku' 
+        ? 'چەند کۆپییەک لەم کارتی بازرگانییە دەتەوێت زیاد بکەیت؟' 
+        : state.language === 'ar' 
+        ? 'كم عدد النسخ من بطاقة العمل هذه تريد إضافتها؟' 
+        : 'How many copies of this business card do you want to add?';
+    }
+    return t('idphoto.copyDialog.description');
+  };
+
+  const getSelectDialogTitle = () => {
+    if (isBusinessCardSlot) {
+      return state.language === 'ku' ? 'هەڵبژاردنی کارتی بازرگانی' : state.language === 'ar' ? 'اختر بطاقة العمل' : 'Select Business Card';
+    }
+    return state.language === 'ku' ? 'هەڵبژاردنی وێنە' : 'Select Photo';
+  };
+
+  const getSelectDialogDescription = () => {
+    if (isBusinessCardSlot) {
+      return state.language === 'ku' 
+        ? 'کارتێکی بازرگانی لەوانەی هەن هەڵبژێرە یان کارتێکی نوێ باربکە' 
+        : state.language === 'ar' 
+        ? 'اختر بطاقة عمل موجودة أو قم برفع بطاقة جديدة' 
+        : 'Select an existing business card or upload a new one';
+    }
+    return state.language === 'ku' 
+      ? 'وێنەیەک لەوانەی هەن هەڵبژێرە یان وێنەیەکی نوێ باربکە' 
+      : 'Select an existing photo from the page or upload a new one';
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
@@ -132,16 +184,21 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!photo) return;
-    dispatch({ type: 'REMOVE_PHOTO', payload: photo.id });
+    
+    if (state.mode === 'businesscard' || state.mode === 'idphoto' || state.mode === 'invoice') {
+      dispatch({ type: 'REMOVE_PHOTO_BY_INDEX', payload: globalIndex });
+    } else {
+      dispatch({ type: 'REMOVE_PHOTO', payload: photo.id });
+    }
   };
 
   const handleReplaceClick = (e: React.MouseEvent) => {
-    if (state.mode === 'businesscard') {
-      // Let it bubble up to select the card slot, don't open file picker
-      return;
-    }
     e.stopPropagation();
-    fileInputRef.current?.click();
+    if (isMultiCopySlot && uniquePhotos.length > 0) {
+      setShowSelectExistingDialog(true);
+    } else {
+      fileInputRef.current?.click();
+    }
   };
 
   const handleInsertClick = () => {
@@ -176,8 +233,8 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
                 annotations: []
             };
             
-            // For ID photo slots, show dialog to ask how many copies
-            if (isIdPhotoSlot) {
+            // For ID photo/Business card slots, show dialog to ask how many copies
+            if (isMultiCopySlot) {
                 setPendingPhoto(newPhoto);
                 setCopyCount(1);
                 setShowCopyDialog(true);
@@ -440,13 +497,18 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
                      roundingClass,
                      isDragOver ? "bg-muted" : ""
                  )}
-                 onClick={handleReplaceClick}
+                 onClick={(e) => {
+                   if (isBusinessCardSlot) {
+                     return;
+                   }
+                   handleReplaceClick(e);
+                 }}
               >
-                 <div className="flex flex-col items-center gap-1.5 text-muted-foreground transition-colors no-print">
+                  <div className="flex flex-col items-center gap-1.5 text-muted-foreground transition-colors no-print">
                     <div 
                         onClick={(e) => {
-                            e.stopPropagation();
-                            fileInputRef.current?.click();
+                          e.stopPropagation();
+                          handleReplaceClick(e);
                         }}
                         className={cn(
                             "w-10 h-10 rounded-md flex items-center justify-center transition-all border cursor-pointer",
@@ -459,6 +521,13 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
                     </div>
                     
                     <span 
+                        onClick={(e) => {
+                          if (isBusinessCardSlot) {
+                            return;
+                          }
+                          e.stopPropagation();
+                          handleReplaceClick(e);
+                        }}
                         className={cn(
                             "text-[9px] font-medium uppercase tracking-wide transition-colors",
                             isDragOver ? "text-foreground" : "text-muted-foreground group-hover/empty:text-foreground"
@@ -588,13 +657,13 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
           </div>
       )}
 
-      {/* ID Photo Copy Count Dialog */}
+      {/* ID Photo/Business Card Copy Count Dialog */}
       <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{t('idphoto.copyDialog.title')}</DialogTitle>
+            <DialogTitle>{getCopyDialogTitle()}</DialogTitle>
             <DialogDescription>
-              {t('idphoto.copyDialog.description')}
+              {getCopyDialogDescription()}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -607,7 +676,7 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
                   id="copyCount"
                   type="range"
                   min={1}
-                  max={maxCopies}
+                  max={maxCopiesVal}
                   value={copyCount}
                   onChange={(e) => setCopyCount(parseInt(e.target.value))}
                   className="flex-1 h-2 accent-foreground"
@@ -629,6 +698,86 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
             </Button>
             <Button type="button" onClick={handleConfirmCopies}>
               {t('idphoto.copyDialog.add')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ID Photo/Business Card Choose Existing or Upload Dialog */}
+      <Dialog open={showSelectExistingDialog} onOpenChange={setShowSelectExistingDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {getSelectDialogTitle()}
+            </DialogTitle>
+            <DialogDescription>
+              {getSelectDialogDescription()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <label className="text-xs font-semibold text-muted-foreground block mb-2">
+              {isBusinessCardSlot 
+                ? (state.language === 'ku' ? 'کارتەکانی ناو لاپەڕە' : state.language === 'ar' ? 'البطاقات في الصفحة' : 'Cards on page')
+                : (state.language === 'ku' ? 'وێنەکانی ناو لاپەڕە' : 'Photos on page')}
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {uniquePhotos.map((item, idx) => (
+                <button
+                   key={idx}
+                   type="button"
+                   onClick={() => {
+                     const clonedPhoto = {
+                       ...item,
+                       id: generateId()
+                     };
+                     if (photo) {
+                       dispatch({
+                         type: 'UPDATE_PHOTO',
+                         payload: {
+                           ...photo,
+                           src: clonedPhoto.src,
+                           name: clonedPhoto.name,
+                           crop: undefined,
+                           rotation: 0,
+                           annotations: []
+                         }
+                       });
+                       setShowSelectExistingDialog(false);
+                     } else {
+                       setPendingPhoto(clonedPhoto);
+                       setCopyCount(1);
+                       setShowSelectExistingDialog(false);
+                       setShowCopyDialog(true);
+                     }
+                   }}
+                   className="relative aspect-[3/4] border border-border rounded-md overflow-hidden hover:border-foreground hover:scale-105 transition-all bg-muted flex items-center justify-center shadow-sm"
+                >
+                  <img src={item.src} className="w-full h-full object-cover" alt={item.name} />
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <DialogFooter className="flex sm:justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowSelectExistingDialog(false)}
+            >
+              {state.language === 'ku' ? 'پاشگەزبوونەوە' : 'Cancel'}
+            </Button>
+            <Button 
+              type="button" 
+              onClick={() => {
+                setShowSelectExistingDialog(false);
+                setTimeout(() => {
+                  fileInputRef.current?.click();
+                }, 100);
+              }}
+            >
+              {isBusinessCardSlot
+                ? (state.language === 'ku' ? 'بارکردنی کارتی نوێ' : state.language === 'ar' ? 'رفع بطاقة جديدة' : 'Upload New Card')
+                : (state.language === 'ku' ? 'بارکردنی وێنەی نوێ' : 'Upload New Photo')}
             </Button>
           </DialogFooter>
         </DialogContent>

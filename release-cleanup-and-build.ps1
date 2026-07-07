@@ -7,7 +7,7 @@ Write-Host "=== Photo Printer Pro Release Management ===" -ForegroundColor Cyan
 Write-Host "Version: $version" -ForegroundColor Green
 Write-Host ""
 
-$repo = "Azhersallah/photo-printer-pro"
+$repo = "Azhersallah/Photo-Printer-Free"
 
 # Step 1: Delete all existing releases
 Write-Host "Step 1: Deleting all existing releases..." -ForegroundColor Yellow

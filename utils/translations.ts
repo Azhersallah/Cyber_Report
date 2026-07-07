@@ -47,6 +47,7 @@ export const translations: Record<string, Record<Language, string>> = {
   'nav.qrcode': { en: 'QR Code', ku: 'QR کۆد', ar: 'رمز الاستجابة' },
   'nav.tasks': { en: 'Tasks & Notes', ku: 'ئەرکەکان و تێبینی', ar: 'المهام والملاحظات' },
   'nav.stickers': { en: 'Stickers & Labels', ku: 'ستیکەر و لایبڵ', ar: 'الملصقات والبطاقات' },
+  'nav.stamp': { en: 'Stamp Creator', ku: 'دروستکردنی مۆر', ar: 'مصمم الأختام' },
   'tasks.tab': { en: 'Tasks', ku: 'ئەرکەکان', ar: 'المهام' },
   'nav.envelope': { en: 'Envelope', ku: 'زەرف', ar: 'ظرف' },
   'tasks.title': { en: 'Tasks & Notes', ku: 'ئەرکەکان و تێبینییەکان', ar: 'المهام والملاحظات' },
@@ -65,7 +66,9 @@ export const translations: Record<string, Record<Language, string>> = {
   'notes.empty': { en: 'No notes found. Create a new note above.', ku: 'هیچ تێبینییەک نییە. تێبینییەکی نوێ زیاد بکە.', ar: 'لا توجد ملاحظات. أضف ملاحظة جديدة.' },
   'notes.save': { en: 'Save Note', ku: 'پاشەکەوتکردنی تێبینی', ar: 'حفظ الملاحظة' },
   'toast.comingSoon': { en: 'Coming Soon', ku: 'بەم زووانە دێت', ar: 'قريباً' },
-  'action.clear': { en: 'Clear All', ku: 'پاککردنەوە', ar: 'مسح الكل' },
+  'action.clear': { en: 'Clear All', ku: 'پاككردنەوە', ar: 'مسح الكل' },
+  'action.add': { en: 'Add', ku: 'زیادکردن', ar: 'إضافة' },
+  'action.edit': { en: 'Edit', ku: 'دەستکاریکردن', ar: 'تعديل' },
   'action.print': { en: 'Print', ku: 'چاپکردن', ar: 'طباعة' },
   'action.download': { en: 'Download', ku: 'دابەزاندن', ar: 'تنزيل' },
   'action.save': { en: 'Save', ku: 'پاشەکەوتکردن', ar: 'حفظ' },
@@ -111,7 +114,7 @@ export const translations: Record<string, Record<Language, string>> = {
   'settings.accentColor': { en: 'Accent Theme Color', ku: 'ڕەنگی تەمای سەرەکی', ar: 'لون التمييز' },
   'settings.logoAsset': { en: 'Logo Asset', ku: 'لۆگۆ', ar: 'شعار' },
   'settings.noAsset': { en: 'No Asset Loaded', ku: 'هیچ لۆگۆیەک نییە', ar: 'لا يوجد شعار' },
-  'settings.assetScale': { en: 'Asset Scale', ku: 'قەبارەی لۆگۆ', ar: 'حجم الشعار' },
+  'settings.assetScale': { en: 'Asset Scale', ku: 'قەبارەی لۆگۆ', ar: 'شعار' },
 
   // Sidebar - Upload
   'upload.image': { en: 'Upload Image', ku: 'هەڵبژاردنی وێنە', ar: 'رفع صورة' },
@@ -207,6 +210,7 @@ export const translations: Record<string, Record<Language, string>> = {
   'card.fillSmall': { en: 'Fill Small Cards', ku: 'پڕکردنەوەی کارتە بچووکەکان', ar: 'ملء البطاقات الصغيرة' },
   'card.formLayout': { en: 'Form Layout', ku: 'شێوازی فۆرم', ar: 'تخطيط النموذج' },
   'card.formLayoutReverse': { en: 'Form Layout (Reversed)', ku: 'شێوازی فۆرم (پێچەوانە)', ar: 'تخطيط النموذج (معكوس)' },
+  'card.customLayout': { en: 'Custom Canvas', ku: 'شێوازی دەستکرد (بەتاڵ)', ar: 'تخطيط مخصص' },
   'card.gridLayout': { en: 'Grid Layout', ku: 'شێوازی تۆڕ', ar: 'تخطيط الشبكة' },
 
   'idphoto.desc': { 
@@ -411,7 +415,76 @@ export const translations: Record<string, Record<Language, string>> = {
   'transfer.hint': { en: 'Make sure your phone and computer are on the same WiFi network', ku: 'دڵنیابە لەوەی مۆبایل و کۆمپیوتەرەکەت لە هەمان وایفایدان', ar: 'تأكد أن هاتفك وحاسوبك على نفس شبكة WiFi' },
   'transfer.photosReceived': { en: '{count} photo(s) received', ku: '{count} وێنە وەرگیرا', ar: 'تم استلام {count} صورة' },
   'transfer.error': { en: 'Failed to start server', ku: 'سێرڤەر دەست پێ نەکرد', ar: 'فشل في بدء الخادم' },
-  'transfer.startShort': { en: 'From Phone', ku: 'لە مۆبایلەوە', ar: 'من الهاتف' },
+  'transfer.startShort': { en: 'From Phone', ku: 'لە مۆبایل', ar: 'من الهاتف' },
+  'transfer.fromPhone': { en: 'From Phone', ku: 'لە مۆبایل', ar: 'من الهاتف' },
+
+  // Stamp Creator Translations
+  'stamp.title': { en: 'Stamp Creator', ku: 'ئامرازی دروستکردنی مۆر', ar: 'مصمم الأختام' },
+  'stamp.subtitle': { en: 'Design and print professional stamps', ku: 'دیزاین و چاپکردنی مۆری پیشەیی', ar: 'تصميم وطباعة الأختام الاحترافية' },
+  'stamp.template': { en: 'Templates', ku: 'نموونەکان (تێمپڵەیت)', ar: 'النماذج' },
+  'stamp.settings': { en: 'Customization Settings', ku: 'ڕێکخستنەکانی دیزاین', ar: 'إعدادات التصميم' },
+  'stamp.shape': { en: 'Stamp Shape', ku: 'شێوەی مۆر', ar: 'شكل الختم' },
+  'stamp.size': { en: 'Stamp Size (mm)', ku: 'قەبارەی مۆر (ملم)', ar: 'حجم الختم (ملم)' },
+  'stamp.outerText': { en: 'Curved Top Text', ku: 'دەقی سەرەوەی چەماوە', ar: 'النص العلوي المنحني' },
+  'stamp.innerText': { en: 'Curved Bottom Text', ku: 'دەقی خوارەوەی چەماوە', ar: 'النص السفلي المنحني' },
+  'stamp.centerText': { en: 'Center Text', ku: 'دەقی ناوەڕاست', ar: 'النص الأوسط' },
+  'stamp.fontFamily': { en: 'Font Family', ku: 'شێوازی فۆنت', ar: 'نوع الخط' },
+  'stamp.fontSize': { en: 'Font Size', ku: 'قەبارەی فۆنت', ar: 'حجم الخط' },
+  'stamp.letterSpacing': { en: 'Letter Spacing', ku: 'مەودای پیتەکان', ar: 'تباعد الأحرف' },
+  'stamp.textColor': { en: 'Ink Color', ku: 'ڕەنگی مۆرەکە', ar: 'لون الحبر' },
+  'stamp.borderWidth': { en: 'Border Thickness', ku: 'ئەستووری چوارچێوە', ar: 'سمك الإطار' },
+  'stamp.hasInnerRing': { en: 'Inner Ring', ku: 'خەتی ناوەوەی باریک', ar: 'حلقة داخلية' },
+  'stamp.hasDottedRing': { en: 'Dotted Ring', ku: 'حەڵقەی خاڵخاڵ', ar: 'حلقة منقطة' },
+  'stamp.hasStars': { en: 'Separator Stars', ku: 'ئەستێرەی جیاکەرەوە', ar: 'نجوم فاصلة' },
+  'stamp.starCount': { en: 'Stars Count', ku: 'ژمارەی ئەستێرەکان', ar: 'عدد النجوم' },
+  'stamp.distressEffect': { en: 'Ink Distress Effect', ku: 'شێوەی مەرەکەبی ڕاستەقینە', ar: 'تأثير حبر قديم' },
+  'stamp.monochrome': { en: 'Pure Black & White', ku: 'ڕەش و سپی تەواو (مۆنۆکڕۆم)', ar: 'أبيض وأسود نقي' },
+  'stamp.centerImage': { en: 'Logo / Signature Image', ku: 'وێنە یان واژۆی ناوەڕاست', ar: 'شعار أو توقيع بالوسط' },
+  'stamp.signatureThreshold': { en: 'Signature Extraction Threshold', ku: 'ڕادەی پاککردنەوەی واژۆ', ar: 'عتبة استخلاص التوقيع' },
+  'stamp.uploadLogo': { en: 'Upload Logo/Signature', ku: 'داگرتنی واژۆ یان لۆگۆ', ar: 'رفع شعار/توقيع' },
+  'stamp.clearLogo': { en: 'Clear Image', ku: 'سڕینەوەی وێنە', ar: 'مسح الصورة' },
+  'stamp.downloadPNG': { en: 'Download PNG', ku: 'داگرتنی وەک PNG', ar: 'تنزيل PNG' },
+  'stamp.downloadSVG': { en: 'Download SVG', ku: 'داگرتنی وەک SVG', ar: 'تنزيل SVG' },
+  'stamp.print': { en: 'Print Stamp', ku: 'چاپکردنی مۆرەکە', ar: 'طباعة الختم' },
+  'stamp.shape.circle': { en: 'Circular', ku: 'بازنەیی', ar: 'دائري' },
+  'stamp.shape.oval': { en: 'Oval', ku: 'هێلکەیی', ar: 'بيضاوي' },
+  'stamp.shape.rectangle': { en: 'Rectangular', ku: 'لاکێشەیی', ar: 'مستطيل' },
+  'stamp.shape.square': { en: 'Square', ku: 'چوارگۆشە', ar: 'مربع' },
+  'stamp.template.ministry': { en: 'Official Ministry Stamp', ku: 'مۆری فەرمی وەزارەت', ar: 'ختم وزارة رسمي' },
+  'stamp.template.company': { en: 'Circular Company Stamp', ku: 'مۆری بازنەیی کۆمپانیا', ar: 'ختم شركة دائري' },
+  'stamp.template.approved': { en: 'APPROVED Rectangular Stamp', ku: 'مۆری لاکێشەیی (APPROVED)', ar: 'ختم مستطيل (APPROVED)' },
+  'stamp.template.signature': { en: 'Personal Signature Stamp', ku: 'مۆری واژۆی تایبەت', ar: 'ختم توقيع شخصي' },
+  'stamp.template.paid': { en: 'PAID Square Stamp', ku: 'مۆری چوارگۆشەی (PAID)', ar: 'ختم مربع (PAID)' },
+  'stamp.template.bank': { en: 'Oval Bank Stamp', ku: 'مۆری هێلکەیی بانک', ar: 'ختم بنك بيضاوي' },
+  'stamp.threshold.desc': { en: 'Drag to remove paper background and extract signature cleanly.', ku: 'ڕایبکێشە بۆ لابردنی باکگراوندی سپی و پاککردنەوەی واژۆکە.', ar: 'اسحب لإزالة خلفية الورقة واستخلاص التوقيع بنقاء.' },
+
+  // Layers panel
+  'stamp.layers': { en: 'Layers', ku: 'چینەکان', ar: 'الطبقات' },
+  'stamp.noLayers': { en: 'No layers added yet.', ku: 'هیچ چینێک زیادنەکراوە.', ar: 'لم تتم إضافة طبقات بعد.' },
+  'stamp.logo': { en: 'Logo Image', ku: 'وێنەی لۆگۆ', ar: 'صورة الشعار' },
+  'stamp.text': { en: 'Text Layer', ku: 'چینی دەق', ar: 'طبقة نص' },
+
+  // Properties panel
+  'stamp.properties': { en: 'Properties', ku: 'تایبەتمەندییەکان', ar: 'الخصائص' },
+  'stamp.selectLayerPrompt': { en: 'Select a layer to edit its properties.', ku: 'چینێک هەڵبژێرە بۆ دەستکاریکردنی تایبەتمەندییەکانی.', ar: 'اختر طبقة لتعديل خصائصها.' },
+  'stamp.logoAction': { en: 'Logo Actions', ku: 'کردارەکانی لۆگۆ', ar: 'إجراءات الشعار' },
+  'stamp.logoSize': { en: 'Logo Size', ku: 'قەبارەی لۆگۆ', ar: 'حجم الشعار' },
+  'stamp.textContent': { en: 'Text Content', ku: 'ناوەڕۆکی دەق', ar: 'محتوى النص' },
+  'stamp.textType': { en: 'Text Style', ku: 'شێوازی دەق', ar: 'نمط النص' },
+  'stamp.textType.curveUp': { en: 'Curve Up', ku: 'چەمانەوەی سەرەوە', ar: 'انحناء علوي' },
+  'stamp.textType.straight': { en: 'Straight', ku: 'ڕاستەو خۆ', ar: 'مستقيم' },
+  'stamp.textType.curveDown': { en: 'Curve Down', ku: 'چەمانەوەی خوارەوە', ar: 'انحناء سفلي' },
+  'stamp.curvature': { en: 'Curvature Radius', ku: 'ڕادەی خموێنان', ar: 'نصف قطر الانحناء' },
+  'stamp.offsetX': { en: 'Offset X', ku: 'جاتبوونەوەی ئۆفسێت X', ar: 'إزاحة X' },
+  'stamp.offsetY': { en: 'Offset Y', ku: 'جاتبوونەوەی ئۆفسێت Y', ar: 'إزاحة Y' },
+
+  // Sidebar text input
+  'stamp.addText': { en: 'Add Text', ku: 'زیادکردنی دەق', ar: 'إضافة نص' },
+  'stamp.textPlaceholder': { en: 'Enter text…', ku: 'دەقەکەت بنووسە…', ar: 'أدخل النص…' },
+
+  // from/phone transfer
+  'stamp.fromPhone': { en: 'From Phone', ku: 'لە مۆبایل', ar: 'من الهاتف' },
+  'stamp.template.custom': { en: 'My Design', ku: 'دیزاینی خۆم', ar: 'تصميمي الخاص' },
 };
 
 export const getTranslation = (key: string, lang: Language) => {

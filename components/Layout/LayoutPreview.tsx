@@ -83,6 +83,70 @@ export const LayoutPreview: React.FC<LayoutPreviewProps> = ({ type, forPaper = f
         </div>
       );
   }
+
+  if (type === 'businesscard') {
+      return (
+        <div 
+          className={`w-7 h-9 rounded-sm border p-0.5 grid grid-cols-2 grid-rows-5 gap-0.5 pointer-events-none ${!forPaper ? 'bg-background border-border' : ''}`}
+          style={forPaper ? { backgroundColor: bgColor, borderColor } : undefined}
+        >
+          {Array(10).fill(0).map((_, i) => (
+            <div 
+              key={i} 
+              className={`rounded-[1px] ${!forPaper ? 'bg-foreground/40' : ''}`}
+              style={forPaper ? { backgroundColor: fillColor } : undefined}
+            ></div>
+          ))}
+        </div>
+      );
+  }
+
+  if (type === 'businesscard-form') {
+      return (
+        <div 
+          className={`w-7 h-9 rounded-sm border p-0.5 flex gap-0.5 pointer-events-none ${!forPaper ? 'bg-background border-border' : ''}`}
+          style={forPaper ? { backgroundColor: bgColor, borderColor } : undefined}
+        >
+          <div 
+            className={`rounded-[1px] w-1/2 h-full ${!forPaper ? 'bg-foreground/40' : ''}`}
+            style={forPaper ? { backgroundColor: fillColor } : undefined}
+          ></div>
+          <div className="w-1/2 h-full flex flex-col gap-0.5">
+            {Array(5).fill(0).map((_, i) => (
+              <div 
+                key={i} 
+                className={`rounded-[1px] flex-1 w-full ${!forPaper ? 'bg-foreground/45' : ''}`}
+                style={forPaper ? { backgroundColor: fillColor } : undefined}
+              ></div>
+            ))}
+          </div>
+        </div>
+      );
+  }
+
+  if (type === 'businesscard-form-reverse') {
+      return (
+        <div 
+          className={`w-7 h-9 rounded-sm border p-0.5 flex gap-0.5 pointer-events-none ${!forPaper ? 'bg-background border-border' : ''}`}
+          style={forPaper ? { backgroundColor: bgColor, borderColor } : undefined}
+        >
+          <div className="w-1/2 h-full flex flex-col gap-0.5">
+            {Array(5).fill(0).map((_, i) => (
+              <div 
+                key={i} 
+                className={`rounded-[1px] flex-1 w-full ${!forPaper ? 'bg-foreground/45' : ''}`}
+                style={forPaper ? { backgroundColor: fillColor } : undefined}
+              ></div>
+            ))}
+          </div>
+          <div 
+            className={`rounded-[1px] w-1/2 h-full ${!forPaper ? 'bg-foreground/40' : ''}`}
+            style={forPaper ? { backgroundColor: fillColor } : undefined}
+          ></div>
+        </div>
+      );
+  }
+
   
   return (
     <div 

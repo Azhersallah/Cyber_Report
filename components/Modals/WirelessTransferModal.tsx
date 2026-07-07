@@ -12,9 +12,10 @@ import { Photo } from '../../types';
 interface WirelessTransferModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onPhotoReceived?: (photo: Photo) => void;
 }
 
-export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ isOpen, onClose }) => {
+export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ isOpen, onClose, onPhotoReceived }) => {
   const { state, dispatch } = useApp();
   const t = (key: string) => getTranslation(key, state.language);
   const [activeTab, setActiveTab] = useState<'app' | 'folder'>('app');
@@ -90,7 +91,11 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
               rotation: 0,
               annotations: []
             };
-            dispatch({ type: 'ADD_PHOTOS', payload: [newPhoto] });
+            if (onPhotoReceived) {
+              onPhotoReceived(newPhoto);
+            } else {
+              dispatch({ type: 'ADD_PHOTOS', payload: [newPhoto] });
+            }
           }
           setReceivedCount(prev => prev + 1);
           setLastReceivedName(data.name);
@@ -290,10 +295,16 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
               <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-3">
                 <WifiOff size={24} className="text-destructive" />
               </div>
-              <p className="text-sm text-destructive mb-4">{error}</p>
-              <Button onClick={() => setError('')} variant="outline" className="w-full">
-                {isKurdish ? 'گەڕانەوە' : 'Go Back'}
-              </Button>
+              <p className="text-sm text-destructive mb-4 text-start leading-relaxed">{error}</p>
+              <div className="flex flex-col gap-2">
+                <Button onClick={() => { setError(''); startServer('standard'); }} variant="default" className="w-full">
+                  <Wifi size={15} className="mr-2" />
+                  {isKurdish ? 'بەکارهێنانی وایەرلێسی ئاسایی' : 'Use Standard Wi-Fi Instead'}
+                </Button>
+                <Button onClick={() => setError('')} variant="outline" className="w-full">
+                  {isKurdish ? 'گەڕانەوە' : 'Go Back'}
+                </Button>
+              </div>
             </div>
           ) : !serverRunning || isStarting ? (
             isStarting && (

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { Photo, LayoutType } from '../../types';
 import PhotoSlot from './PhotoSlot';
-import { useApp } from '../../store/AppContext';
+import { useApp, getCardSizeKey } from '../../store/AppContext';
 import { getTranslation } from '../../utils/translations';
 import { Trash2, LayoutTemplate, ArrowLeftRight, Check, Plus, Type, X, Download, RotateCcw, Grid, FileText } from 'lucide-react';
 import { LAYOUTS } from '../../constants';
@@ -117,6 +117,185 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
   const [localSubtitle, setLocalSubtitle] = useState(state.pageSubtitles[pageIndex] || '');
   const isReportMode = state.mode === 'photos';
   const showPageActions = state.mode === 'photos' || state.mode === 'businesscard' || state.mode === 'idphoto';
+
+  const [dragState, setDragState] = useState<{ index: number; startX: number; startY: number; startCardX: number; startCardY: number } | null>(null);
+  const [localDragPos, setLocalDragPos] = useState<{ x: number; y: number } | null>(null);
+  const dragFinalPosRef = useRef<{ x: number; y: number } | null>(null);
+  const [activeGuides, setActiveGuides] = useState<{ x?: number; y?: number } | null>(null);
+
+  useEffect(() => {
+      if (!dragState) return;
+      
+      const handleMouseMove = (e: MouseEvent) => {
+          const pageEl = document.getElementById(`page-container-${pageIndex}`);
+          if (!pageEl) return;
+          const rect = pageEl.getBoundingClientRect();
+          const pxToMmWidth = 210 / rect.width;
+          const pxToMmHeight = 297 / rect.height;
+          
+          const deltaX = (e.clientX - dragState.startX) * pxToMmWidth;
+          const deltaY = (e.clientY - dragState.startY) * pxToMmHeight;
+          
+          const candidateX = dragState.startCardX + deltaX;
+          const candidateY = dragState.startCardY + deltaY;
+          
+          const currentSizeKey = getCardSizeKey(dragState.index, state.pageLayouts, state.globalLayout);
+          const currentSize = state.businessCardSizes?.[currentSizeKey] || { width: 101.5, height: 58 };
+          
+          let snappedX = candidateX;
+          let snappedY = candidateY;
+          let guideX: number | undefined = undefined;
+          let guideY: number | undefined = undefined;
+          
+          const targetPageIndex = pageIndex;
+          const getPageStartIndex = (pIndex: number) => {
+              let currentPhotoIndex = 0;
+              for (let p = 0; p < pIndex; p++) {
+                  let layoutId = state.pageLayouts[p] || state.globalLayout;
+                  const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
+                  currentPhotoIndex += layoutDef.capacity;
+              }
+              return currentPhotoIndex;
+          };
+          const pageStartIndex = getPageStartIndex(targetPageIndex);
+          
+          // Collect boundaries of other visible cards on this page
+          const otherCards: { x: number; y: number; width: number; height: number }[] = [];
+          for (let i = 0; i < 12; i++) {
+              const oGIdx = pageStartIndex + i;
+              if (oGIdx !== dragState.index) {
+                   const sizeKey = getCardSizeKey(oGIdx, state.pageLayouts, state.globalLayout);
+                   const size = state.businessCardSizes?.[sizeKey];
+                   if (size && !size.hidden) {
+                       otherCards.push({
+                           x: size.x ?? 10,
+                           y: size.y ?? 10,
+                           width: size.width,
+                           height: size.height
+                       });
+                   }
+              }
+          }
+          
+          const SNAP_DIST = 3; // Snapping distance in mm
+          
+          // Page boundary snapping
+          if (Math.abs(candidateX) < SNAP_DIST) {
+              snappedX = 0;
+              guideX = 0;
+          } else if (Math.abs(candidateX + currentSize.width - 210) < SNAP_DIST) {
+              snappedX = 210 - currentSize.width;
+              guideX = 210;
+          }
+          
+          if (Math.abs(candidateY) < SNAP_DIST) {
+              snappedY = 0;
+              guideY = 0;
+          } else if (Math.abs(candidateY + currentSize.height - 297) < SNAP_DIST) {
+              snappedY = 297 - currentSize.height;
+              guideY = 297;
+          }
+          
+          // Snap to other cards
+          otherCards.forEach(c => {
+              const cRight = c.x + c.width;
+              const cBottom = c.y + c.height;
+              
+              // X alignments
+              // Left align with c.x
+              if (Math.abs(candidateX - c.x) < SNAP_DIST) {
+                  snappedX = c.x;
+                  guideX = c.x;
+              }
+              // Right edge align with c.x
+              else if (Math.abs(candidateX + currentSize.width - c.x) < SNAP_DIST) {
+                  snappedX = c.x - currentSize.width;
+                  guideX = c.x;
+              }
+              // Left edge align with c.x + c.width
+              else if (Math.abs(candidateX - cRight) < SNAP_DIST) {
+                  snappedX = cRight;
+                  guideX = cRight;
+              }
+              // Right edge align with c.x + c.width
+              else if (Math.abs(candidateX + currentSize.width - cRight) < SNAP_DIST) {
+                  snappedX = cRight - currentSize.width;
+                  guideX = cRight;
+              }
+              
+              // Y alignments
+              // Top align with c.y
+              if (Math.abs(candidateY - c.y) < SNAP_DIST) {
+                  snappedY = c.y;
+                  guideY = c.y;
+              }
+              // Bottom edge align with c.y
+              else if (Math.abs(candidateY + currentSize.height - c.y) < SNAP_DIST) {
+                  snappedY = c.y - currentSize.height;
+                  guideY = c.y;
+              }
+              // Top edge align with c.y + c.height
+              else if (Math.abs(candidateY - cBottom) < SNAP_DIST) {
+                  snappedY = cBottom;
+                  guideY = cBottom;
+              }
+              // Bottom edge align with c.y + c.height
+              else if (Math.abs(candidateY + currentSize.height - cBottom) < SNAP_DIST) {
+                  snappedY = cBottom - currentSize.height;
+                  guideY = cBottom;
+              }
+          });
+          
+          // Constrain final snapped coordinates within page
+          let finalX = Math.round(snappedX * 2) / 2; // snap grid to 0.5mm
+          let finalY = Math.round(snappedY * 2) / 2;
+          
+            if (currentSize.width <= 210) {
+                finalX = Math.max(0, Math.min(finalX, 210 - currentSize.width));
+            }
+            if (currentSize.height <= 297) {
+                finalY = Math.max(0, Math.min(finalY, 297 - currentSize.height));
+            }
+           
+           // Set guide indicators
+           if (guideX !== undefined || guideY !== undefined) {
+               setActiveGuides({ x: guideX, y: guideY });
+           } else {
+               setActiveGuides(null);
+           }
+           
+           dragFinalPosRef.current = { x: finalX, y: finalY };
+           setLocalDragPos({ x: finalX, y: finalY });
+       };
+       
+       const handleMouseUp = () => {
+           if (dragState && dragFinalPosRef.current) {
+               const currentSizeKey = getCardSizeKey(dragState.index, state.pageLayouts, state.globalLayout);
+               const currentSize = state.businessCardSizes?.[currentSizeKey] || { width: 101.5, height: 58 };
+               dispatch({
+                   type: 'UPDATE_BUSINESS_CARD_SIZE',
+                   payload: {
+                       index: dragState.index,
+                       width: currentSize.width,
+                       height: currentSize.height,
+                       x: dragFinalPosRef.current.x,
+                       y: dragFinalPosRef.current.y
+                   }
+               });
+           }
+          setDragState(null);
+          setLocalDragPos(null);
+          dragFinalPosRef.current = null;
+          setActiveGuides(null);
+      };
+      
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+          window.removeEventListener('mousemove', handleMouseMove);
+          window.removeEventListener('mouseup', handleMouseUp);
+      };
+  }, [dragState, pageIndex, state.businessCardSizes, dispatch]);
 
   useEffect(() => {
       const targetTitle = state.pageTitles[pageIndex] || state.globalTitle;
@@ -330,25 +509,38 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
     };
 
     const renderIdPhotoSection = (sectionIdx: number, useFixedSize: boolean = true) => {
-        // Get slot count for this section (default 12)
-        const slotCount = settings.idPhotoSlotCounts?.[sectionIdx] ?? 12;
-        
+        // Determine photo type and dimensions
+        const isPassport = (settings.idPhotoType ?? 'standard') === 'passport';
+
+        // Passport: 3.7cm × 4.7cm → 2 cols × 3 rows = 6 per A6
+        // Standard: 2.7cm × 3.7cm → 3 cols × 4 rows = 12 per A6
+        const photoW = isPassport ? '3.7cm' : '2.7cm';
+        const photoH = isPassport ? '4.7cm' : '3.7cm';
+        const cols   = isPassport ? 2 : 3;
+        const rows   = isPassport ? 3 : 4;
+        const maxSlots = cols * rows;
+
+        // Get slot count for this section (capped to maxSlots)
+        const slotCount = Math.min(settings.idPhotoSlotCounts?.[sectionIdx] ?? maxSlots, maxSlots);
+
         // Calculate the starting index for this A6 section's photos
-        // Each A6 section has 12 photo slots
-        const sectionPhotoStartIndex = sectionIdx * 12;
-        
+        const sectionPhotoStartIndex = sectionIdx * maxSlots;
+
         return (
             <div 
                 key={sectionIdx} 
                 className={`border border-gray-200 print:border-transparent relative bg-white flex items-center justify-center group ${!useFixedSize ? 'h-full w-full' : ''}`}
                 style={useFixedSize ? a6FixedSizeStyle : undefined}
             >
-                {/* Each A6 section: 3 columns × 4 rows = 12 ID photos */}
-                <div className="grid grid-cols-3 grid-rows-4 gap-0 items-center justify-items-center">
-                    {Array(12).fill(null).map((_, i) => {
+                {/* Grid: cols × rows photos */}
+                <div
+                    className="grid gap-0 items-center justify-items-center"
+                    style={{ gridTemplateColumns: `repeat(${cols}, auto)`, gridTemplateRows: `repeat(${rows}, auto)` }}
+                >
+                    {Array(maxSlots).fill(null).map((_, i) => {
                         const photoIndex = sectionPhotoStartIndex + i;
                         return (
-                            <div key={i} className="relative overflow-hidden bg-white border border-gray-100 print:border-transparent" style={{ width: '2.7cm', height: '3.7cm' }}>
+                            <div key={i} className="relative overflow-hidden bg-white border border-gray-100 print:border-transparent" style={{ width: photoW, height: photoH }}>
                                 {i < slotCount ? (
                                     <PhotoSlot 
                                         index={i} 
@@ -443,30 +635,98 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
 
     if (layout === 'businesscard') {
       return (
-         <div className="grid grid-cols-2 grid-rows-5 gap-0 h-full w-full border-t border-l border-gray-100 print:border-transparent">
-            {Array(10).fill(null).map((_, i) => (
-                 <div key={i} className="border-r border-b border-gray-200 p-1.5 relative overflow-hidden bg-white print:border-transparent">
-                    <PhotoSlot 
-                        index={i} 
-                        slotId={`p${pageIndex}_s${i}`}
-                        photo={photos[i]} 
-                        badgeColor={settings.badgeColor}
-                        className="w-full h-full shadow-none rounded-none"
-                        onEdit={onEditPhoto}
-                        onInsert={(p) => handleInsertPhoto(i, p)}
-                        enableInsertTriggers={false}
-                        globalIndex={startIndex + i}
-                        onSwap={handleSwapPhotos}
-                    />
-                 </div>
-            ))}
+         <div className="flex gap-0 h-full w-full border-t border-l border-gray-100 bg-white print:border-transparent" onClick={() => { dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: null }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}>
+            {/* Left Column (even indices) */}
+            <div className="flex-1 flex flex-col gap-0 items-start h-full min-h-0 bg-white">
+                {[0, 2, 4, 6, 8].map((idx) => {
+                    const gIdx = startIndex + idx;
+                    const sizeKey = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+                    const cardSize = state.businessCardSizes?.[sizeKey];
+                    if (cardSize?.hidden) return null;
+                    const actualCardSize = cardSize || { width: 101.5, height: 58 };
+                    const isSelected = state.selectedBusinessCardIndex === gIdx;
+                    return (
+                        <div 
+                           key={idx} 
+                           onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: gIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
+                           className={cn(
+                              "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0 print:border-transparent print:ring-0 print:bg-transparent w-full",
+                              isSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
+                           )}
+                           style={{
+                              flex: 'none',
+                              height: `${actualCardSize.height}mm`,
+                              width: `${actualCardSize.width}mm`
+                           }}
+                        >
+                           <div className="w-full h-full flex items-center justify-center min-h-0 min-w-0">
+                              <PhotoSlot 
+                                  index={idx} 
+                                  slotId={`p${pageIndex}_s${idx}`}
+                                  photo={photos[idx] || undefined} 
+                                  badgeColor={settings.badgeColor}
+                                  className="w-full h-full shadow-none rounded-none min-h-0"
+                                  onEdit={onEditPhoto}
+                                  onInsert={(p) => handleInsertPhoto(idx, p)}
+                                  enableInsertTriggers={false}
+                                  globalIndex={gIdx}
+                                  onSwap={handleSwapPhotos}
+                              />
+                           </div>
+                        </div>
+                    );
+                })}
+            </div>
+            {/* Right Column (odd indices) */}
+            <div className="flex-1 flex flex-col gap-0 items-start h-full min-h-0 bg-white">
+                {[1, 3, 5, 7, 9].map((idx) => {
+                    const gIdx = startIndex + idx;
+                    const sizeKey = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+                    const cardSize = state.businessCardSizes?.[sizeKey];
+                    if (cardSize?.hidden) return null;
+                    const actualCardSize = cardSize || { width: 101.5, height: 58 };
+                    const isSelected = state.selectedBusinessCardIndex === gIdx;
+                    return (
+                        <div 
+                           key={idx} 
+                           onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT_BUSINESS_CARD_SLOT', payload: gIdx }); dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
+                           className={cn(
+                              "border-r border-b border-gray-200 p-1.5 relative overflow-hidden transition-all flex items-center justify-center bg-white min-h-0 print:border-transparent print:ring-0 print:bg-transparent w-full",
+                              isSelected ? "ring-2 ring-blue-500 border-blue-500 z-10 bg-blue-50/5" : "hover:border-gray-400"
+                           )}
+                           style={{
+                              flex: 'none',
+                              height: `${actualCardSize.height}mm`,
+                              width: `${actualCardSize.width}mm`
+                           }}
+                        >
+                           <div className="w-full h-full flex items-center justify-center min-h-0 min-w-0">
+                              <PhotoSlot 
+                                  index={idx} 
+                                  slotId={`p${pageIndex}_s${idx}`}
+                                  photo={photos[idx] || undefined} 
+                                  badgeColor={settings.badgeColor}
+                                  className="w-full h-full shadow-none rounded-none min-h-0"
+                                  onEdit={onEditPhoto}
+                                  onInsert={(p) => handleInsertPhoto(idx, p)}
+                                  enableInsertTriggers={false}
+                                  globalIndex={gIdx}
+                                  onSwap={handleSwapPhotos}
+                              />
+                           </div>
+                        </div>
+                    );
+                })}
+            </div>
          </div>
       );
     }
 
+
     if (layout === 'businesscard-form') {
       const formGIdx = startIndex + 0;
-      const formSize = state.businessCardSizes?.[formGIdx] || { width: 101.5, height: 290 };
+      const formSizeKey = getCardSizeKey(formGIdx, state.pageLayouts, state.globalLayout);
+      const formSize = state.businessCardSizes?.[formSizeKey] || { width: 101.5, height: 290 };
       const isFormSelected = state.selectedBusinessCardIndex === formGIdx;
       const isFormHidden = formSize?.hidden;
 
@@ -508,7 +768,8 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                {Array(5).fill(null).map((_, i) => {
                   const idx = i + 1;
                   const gIdx = startIndex + idx;
-                  const cardSize = state.businessCardSizes?.[gIdx];
+                  const sizeKey = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+                  const cardSize = state.businessCardSizes?.[sizeKey];
                   const isSelected = state.selectedBusinessCardIndex === gIdx;
 
                   if (cardSize?.hidden) {
@@ -554,8 +815,9 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
     }
 
     if (layout === 'businesscard-form-reverse') {
-      const formGIdx = startIndex + 5;
-      const formSize = state.businessCardSizes?.[formGIdx] || { width: 101.5, height: 290 };
+      const formGIdx = startIndex + 0;
+      const formSizeKey = getCardSizeKey(formGIdx, state.pageLayouts, state.globalLayout);
+      const formSize = state.businessCardSizes?.[formSizeKey] || { width: 101.5, height: 290 };
       const isFormSelected = state.selectedBusinessCardIndex === formGIdx;
       const isFormHidden = formSize?.hidden;
 
@@ -566,7 +828,8 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                {Array(5).fill(null).map((_, i) => {
                   const idx = i + 1;
                   const gIdx = startIndex + idx;
-                  const cardSize = state.businessCardSizes?.[gIdx];
+                  const sizeKey = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+                  const cardSize = state.businessCardSizes?.[sizeKey];
                   const isSelected = state.selectedBusinessCardIndex === gIdx;
 
                   if (cardSize?.hidden) {
@@ -925,6 +1188,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
   };
 
   const getPaddingClass = () => {
+
     if (layout === 'idphoto' || layout === 'idphoto-1' || layout === 'idphoto-2' || layout === 'idphoto-4') return 'p-0';
     if (layout === 'businesscard' || layout === 'businesscard-form' || layout === 'businesscard-form-reverse') return 'p-3';
     if (layout === 'invoice' || layout === 'invoice-1' || layout === 'invoice-4') return 'p-2';
@@ -934,17 +1198,31 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
 
   return (
     <div 
-      className={`flex flex-col h-full w-full relative group ${getPaddingClass()} bg-white`} 
+      id={`page-container-${pageIndex}`}
+      className={`flex flex-col h-full w-full relative group overflow-hidden ${getPaddingClass()} bg-white`} 
       style={{ 
         fontFamily: settings.defaultFontFamily || 'Inter',
         paddingTop: `${4 + (settings.marginTop ?? 0)}mm`,
         paddingRight: `${3 + (settings.marginRight ?? 0)}mm`,
-                        paddingBottom: `${3 + (settings.marginBottom ?? 0)}mm`,
+        paddingBottom: `${3 + (settings.marginBottom ?? 0)}mm`,
         paddingLeft: `${3 + (settings.marginLeft ?? 0)}mm`
       }} 
       dir="ltr"
       onClick={() => { dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}
     >
+       {/* Alignment Smart Guides */}
+       {activeGuides && activeGuides.x !== undefined && (
+           <div 
+               className="absolute top-0 bottom-0 border-l border-dashed border-red-500 z-50 pointer-events-none" 
+               style={{ left: `${activeGuides.x}mm` }}
+           />
+       )}
+       {activeGuides && activeGuides.y !== undefined && (
+           <div 
+               className="absolute left-0 right-0 border-t border-dashed border-red-500 z-50 pointer-events-none" 
+               style={{ top: `${activeGuides.y}mm` }}
+           />
+       )}
        
        {showPageActions && (
          <div className={cn(

@@ -1,14 +1,49 @@
 
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
-import { AppState, Photo, AppMode, LayoutType, AppSettings, INITIAL_SETTINGS, Language, ResumeData, CustomizationOptions, BusinessCardData, QRCodeData } from '../types';
+import { AppState, Photo, AppMode, LayoutType, AppSettings, INITIAL_SETTINGS, Language, ResumeData, CustomizationOptions, BusinessCardData, QRCodeData, StampData } from '../types';
 import { generateId } from '../utils/helpers';
 import { saveResumeData, loadResumeData } from '../utils/resumeStorage';
+import { LAYOUTS } from '../constants';
+
+export const getPageInfo = (
+  cardIndex: number,
+  pageLayouts: Record<number, LayoutType>,
+  globalLayout: LayoutType
+) => {
+  let currentPhotoIndex = 0;
+  let pageIdx = 0;
+  while (true) {
+    let layoutId = pageLayouts[pageIdx] || globalLayout;
+    const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
+    const capacity = layoutDef.capacity;
+    if (cardIndex >= currentPhotoIndex && cardIndex < currentPhotoIndex + capacity) {
+      return { pageIndex: pageIdx, startIndex: currentPhotoIndex, layoutId };
+    }
+    currentPhotoIndex += capacity;
+    pageIdx++;
+    if (pageIdx > 1000) break;
+  }
+  return { pageIndex: 0, startIndex: 0, layoutId: globalLayout };
+};
+
+export const getCardSizeKey = (
+  cardIndex: number,
+  pageLayouts: Record<number, LayoutType>,
+  globalLayout: LayoutType
+): string => {
+  const { layoutId, pageIndex, startIndex } = getPageInfo(cardIndex, pageLayouts, globalLayout);
+  const localIndex = cardIndex - startIndex;
+  let group = 'grid';
+  if (layoutId === 'businesscard-form' || layoutId === 'businesscard-form-reverse') group = 'form';
+  return `${group}_${pageIndex}_${localIndex}`;
+};
 
 // Action Types
 type Action =
   | { type: 'SET_MODE'; payload: AppMode }
   | { type: 'ADD_PHOTOS'; payload: Photo[] }
   | { type: 'REMOVE_PHOTO'; payload: string }
+  | { type: 'REMOVE_PHOTO_BY_INDEX'; payload: number }
   | { type: 'UPDATE_PHOTO'; payload: Photo }
   | { type: 'INSERT_PHOTOS'; payload: { index: number; photos: Photo[] } }
   | { type: 'SWAP_PHOTOS'; payload: { sourceIndex: number; targetIndex: number } }
@@ -46,13 +81,83 @@ type Action =
   | { type: 'CLEAR_BUSINESS_CARD_DATA' }
   | { type: 'SELECT_BUSINESS_CARD_SLOT'; payload: number | null }
   | { type: 'SELECT_PAGE'; payload: number | null }
-  | { type: 'UPDATE_BUSINESS_CARD_SIZE'; payload: { index: number; width: number; height: number } }
+  | { type: 'UPDATE_BUSINESS_CARD_SIZE'; payload: { index: number; width: number; height: number; x?: number; y?: number } }
   | { type: 'DELETE_BUSINESS_CARD_SLOT'; payload: number }
   | { type: 'RESTORE_BUSINESS_CARD_SLOT'; payload: number }
   | { type: 'SET_BUSINESS_CARD_LANGUAGE'; payload: Language }
   | { type: 'RESET_PAGE'; payload: { pageIndex: number; startIndex: number; count: number } }
   // QR Code Generator Actions
-  | { type: 'UPDATE_QR_CODE_DATA'; payload: Partial<QRCodeData> };
+  | { type: 'UPDATE_QR_CODE_DATA'; payload: Partial<QRCodeData> }
+  // Stamp Creator Actions
+  | { type: 'UPDATE_STAMP_DATA'; payload: Partial<StampData> }
+  | { type: 'RESET_STAMP_DATA' };
+
+function getGeneratedPagesCount(state: AppState, activePhotos: (Photo | null)[]): number {
+  if (state.mode === 'invoice') {
+    const invoiceLayout = state.settings.invoiceLayout || '2-landscape';
+    const startNum = state.settings.invoiceStartNumber || 1;
+    const endNum = state.settings.invoiceEndNumber ?? 100;
+    const totalInvoices = Math.max(0, endNum - startNum + 1);
+    if (invoiceLayout === '1-portrait') {
+      return totalInvoices;
+    } else if (invoiceLayout === '2-landscape') {
+      const numberingMode = state.settings.invoiceNumberingMode || 'all-same';
+      if (numberingMode === 'all-same') {
+        return totalInvoices;
+      } else {
+        return Math.ceil(totalInvoices / 2);
+      }
+    } else if (invoiceLayout === '4-portrait') {
+      const numberingMode = state.settings.invoiceNumberingMode || 'all-same';
+      if (numberingMode === 'all-same') {
+        return totalInvoices;
+      } else {
+        return Math.ceil(totalInvoices / 4);
+      }
+    }
+    return 0;
+  } else if (state.mode === 'idphoto') {
+    const idPhotoLayout = state.settings.idPhotoLayout || '4';
+    let numA6Sections = 4;
+    if (idPhotoLayout === '1') numA6Sections = 1;
+    else if (idPhotoLayout === '2') numA6Sections = 2;
+    const capacity = numA6Sections * 12;
+    
+    let currentSectionIndex = 0;
+    let pageIndex = 0;
+    while (currentSectionIndex < activePhotos.length || pageIndex < state.manualPageCount) {
+      currentSectionIndex += capacity;
+      pageIndex++;
+      if (pageIndex > 1000) break;
+    }
+    return pageIndex;
+  } else {
+    let currentPhotoIndex = 0;
+    let pageIndex = 0;
+    while (currentPhotoIndex < activePhotos.length || pageIndex < state.manualPageCount) {
+      let layoutId: LayoutType = state.pageLayouts[pageIndex] || state.globalLayout;
+      if (state.mode === 'businesscard') {
+        const pageLayout = state.pageLayouts[pageIndex];
+        if (pageLayout === 'businesscard' || pageLayout === 'businesscard-form' || pageLayout === 'businesscard-form-reverse') {
+          layoutId = pageLayout;
+        } else {
+          if (state.globalLayout === 'businesscard-form') layoutId = 'businesscard-form';
+          else if (state.globalLayout === 'businesscard-form-reverse') layoutId = 'businesscard-form-reverse';
+          else layoutId = 'businesscard';
+        }
+      }
+      
+      const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
+      const capacity = layoutDef.capacity;
+      if (layoutId !== 'onlytext') {
+        currentPhotoIndex += capacity;
+      }
+      pageIndex++;
+      if (pageIndex > 1000) break;
+    }
+    return pageIndex;
+  }
+}
 
 // Initial State
 const initialState: AppState = {
@@ -137,6 +242,51 @@ const initialState: AppState = {
     errorLevel: 'M',
     logoImage: null,
     logoSize: 20,
+  },
+  stampData: {
+    shape: 'circle',
+    width: 40,
+    height: 40,
+    outerText: '',
+    innerText: '',
+    centerText: '',
+    fontFamily: 'Inter',
+    outerFontFamily: 'Inter',
+    innerFontFamily: 'Inter',
+    centerFontFamily: 'Inter',
+    fontSize: 40,
+    outerFontSize: 38,
+    innerFontSize: 38,
+    centerFontSize: 42,
+    outerRadiusOffset: -20,
+    innerRadiusOffset: -50,
+    letterSpacing: 2,
+    textColor: '#1e3a8a',
+    borderWidth: 4,
+    hasInnerRing: true,
+    hasDottedRing: false,
+    hasStars: true,
+    starCount: 2,
+    distressEffect: 0,
+    monochrome: false,
+    centerImage: null,
+    centerImageSize: 55,
+    centerLayout: 'text-bottom',
+    centerImageOffsetX: 0,
+    centerImageOffsetY: 0,
+    centerTextOffsetX: 0,
+    centerTextOffsetY: 0,
+    outerTextOffsetX: 0,
+    outerTextOffsetY: 0,
+    innerTextOffsetX: 0,
+    innerTextOffsetY: 0,
+    extraCenterText: '',
+    extraCenterFontFamily: 'Noto Naskh Arabic',
+    extraCenterFontSize: 24,
+    extraCenterTextOffsetX: 0,
+    extraCenterTextOffsetY: 0,
+    signatureThreshold: 128,
+    activeSavedDesignId: null
   }
 };
 
@@ -187,7 +337,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
       return {
         ...state,
         ...projectContent,
+        mode: 'photos',
         resumeCustomization: migratedCustomization || {},
+        stampData: projectContent.stampData || initialState.stampData,
         settings: {
           ...state.settings,
           ...migratedSettings,
@@ -200,7 +352,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'SET_MODE': {
-      const targetMode = action.payload;
+      const targetMode = 'photos';
       const currentMode = state.mode;
 
       let nextLastPhotosLayout = state.lastPhotosLayout;
@@ -226,17 +378,47 @@ const appReducer = (state: AppState, action: Action): AppState => {
         }
       }
 
+      // Save current page layouts to mode cache
+      const updatedModePageLayouts = {
+        ...(state.modePageLayouts || {}),
+        [currentMode]: state.pageLayouts
+      };
+
+      // Restore target mode's page layouts
+      const restoredPageLayouts = updatedModePageLayouts[targetMode] || {};
+
       return {
         ...state,
         mode: targetMode,
         globalLayout: newLayout,
         lastPhotosLayout: nextLastPhotosLayout,
-        currentSectionIndex: 0
+        currentSectionIndex: 0,
+        pageLayouts: restoredPageLayouts,
+        modePageLayouts: updatedModePageLayouts,
+        selectedPageIndex: null
       };
     }
 
-    case 'ADD_PHOTOS':
-      return { ...state, [activeKey]: [...activePhotos, ...action.payload] };
+    case 'ADD_PHOTOS': {
+      const newPhotos = [...activePhotos];
+      const incoming = action.payload;
+      let incomingIndex = 0;
+      
+      // Fill null/empty slots first
+      for (let i = 0; i < newPhotos.length && incomingIndex < incoming.length; i++) {
+        if (newPhotos[i] === null) {
+          newPhotos[i] = incoming[incomingIndex];
+          incomingIndex++;
+        }
+      }
+      
+      // Append remaining incoming photos
+      if (incomingIndex < incoming.length) {
+        newPhotos.push(...incoming.slice(incomingIndex));
+      }
+      
+      return { ...state, [activeKey]: newPhotos };
+    }
 
     case 'INSERT_PHOTOS': {
       const { index, photos } = action.payload;
@@ -303,6 +485,14 @@ const appReducer = (state: AppState, action: Action): AppState => {
       }
       return { ...state, [activeKey]: activePhotos.filter(p => !p || p.id !== action.payload) };
 
+    case 'REMOVE_PHOTO_BY_INDEX': {
+      const newPhotos = [...activePhotos];
+      if (action.payload >= 0 && action.payload < newPhotos.length) {
+        newPhotos[action.payload] = null;
+      }
+      return { ...state, [activeKey]: newPhotos };
+    }
+
     case 'UPDATE_PHOTO':
       return {
         ...state,
@@ -363,14 +553,22 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const newPageTitles: Record<number, string> = {};
       const newPageLayouts: Record<number, LayoutType> = {};
       const newTextAreas: Record<string, string> = {};
-      const newBusinessCardSizes: Record<number, any> = {};
+      const newBusinessCardSizes: Record<string, any> = {};
 
       Object.keys(state.businessCardSizes || {}).forEach(k => {
-        const idx = parseInt(k);
-        if (idx >= insertIndex) {
-          newBusinessCardSizes[idx + count] = state.businessCardSizes[idx];
+        const parts = k.split('_');
+        if (parts.length === 3) {
+          const group = parts[0];
+          const p = parseInt(parts[1]);
+          const local = parts[2];
+          
+          if (p >= insertAtPageIndex) {
+            newBusinessCardSizes[`${group}_${p + 1}_${local}`] = state.businessCardSizes[k];
+          } else {
+            newBusinessCardSizes[k] = state.businessCardSizes[k];
+          }
         } else {
-          newBusinessCardSizes[idx] = state.businessCardSizes[idx];
+          newBusinessCardSizes[k] = state.businessCardSizes[k];
         }
       });
 
@@ -409,8 +607,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
     case 'DELETE_PAGE': {
       const { pageIndex, startIndex, count } = action.payload;
+      const totalCurrentPages = getGeneratedPagesCount(state, activePhotos);
       
-      if (state.manualPageCount <= 1) {
+      if (totalCurrentPages <= 1) {
         // Just clear the contents of this single page, don't delete the page itself.
         const newPhotos = [...activePhotos];
         if (count > 0 && startIndex < newPhotos.length) {
@@ -433,10 +632,18 @@ const appReducer = (state: AppState, action: Action): AppState => {
           }
         });
 
-        const newBusinessCardSizes = { ...state.businessCardSizes };
-        for (let i = startIndex; i < startIndex + count; i++) {
-          delete newBusinessCardSizes[i];
-        }
+        const newBusinessCardSizes: Record<string, any> = {};
+        Object.keys(state.businessCardSizes || {}).forEach(k => {
+          const parts = k.split('_');
+          if (parts.length === 3) {
+            const p = parseInt(parts[1]);
+            if (p !== pageIndex) {
+              newBusinessCardSizes[k] = state.businessCardSizes[k];
+            }
+          } else {
+            newBusinessCardSizes[k] = state.businessCardSizes[k];
+          }
+        });
 
         return {
           ...state,
@@ -456,15 +663,25 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const newPageTitles: Record<number, string> = {};
       const newTextAreas: Record<string, string> = {};
       const newPageLayouts: Record<number, LayoutType> = {};
-      const newBusinessCardSizes: Record<number, any> = {};
+      const newBusinessCardSizes: Record<string, any> = {};
 
       Object.keys(state.businessCardSizes || {}).forEach(k => {
-        const idx = parseInt(k);
-        if (idx >= startIndex && idx < startIndex + count) return;
-        if (idx >= startIndex + count) {
-          newBusinessCardSizes[idx - count] = state.businessCardSizes[idx];
+        const parts = k.split('_');
+        if (parts.length === 3) {
+          const group = parts[0];
+          const p = parseInt(parts[1]);
+          const local = parts[2];
+          
+          if (p === pageIndex) {
+            // Deleted page cards size, skip it
+            return;
+          } else if (p > pageIndex) {
+            newBusinessCardSizes[`${group}_${p - 1}_${local}`] = state.businessCardSizes[k];
+          } else {
+            newBusinessCardSizes[k] = state.businessCardSizes[k];
+          }
         } else {
-          newBusinessCardSizes[idx] = state.businessCardSizes[idx];
+          newBusinessCardSizes[k] = state.businessCardSizes[k];
         }
       });
 
@@ -528,10 +745,18 @@ const appReducer = (state: AppState, action: Action): AppState => {
         }
       });
 
-      const newBusinessCardSizes = { ...state.businessCardSizes };
-      for (let i = startIndex; i < startIndex + count; i++) {
-        delete newBusinessCardSizes[i];
-      }
+      const newBusinessCardSizes: Record<string, any> = {};
+      Object.keys(state.businessCardSizes || {}).forEach(k => {
+        const parts = k.split('_');
+        if (parts.length === 3) {
+          const p = parseInt(parts[1]);
+          if (p !== pageIndex) {
+            newBusinessCardSizes[k] = state.businessCardSizes[k];
+          }
+        } else {
+          newBusinessCardSizes[k] = state.businessCardSizes[k];
+        }
+      });
 
       return {
         ...state,
@@ -715,25 +940,28 @@ const appReducer = (state: AppState, action: Action): AppState => {
 
     case 'SELECT_BUSINESS_CARD_SLOT':
       return { ...state, selectedBusinessCardIndex: action.payload };
-
     case 'SELECT_PAGE':
       return { ...state, selectedPageIndex: action.payload };
 
     case 'UPDATE_BUSINESS_CARD_SIZE': {
+      const key = getCardSizeKey(action.payload.index, state.pageLayouts, state.globalLayout);
       const sizes = { ...state.businessCardSizes };
-      sizes[action.payload.index] = {
-        ...sizes[action.payload.index],
+      sizes[key] = {
+        ...sizes[key],
         width: action.payload.width,
         height: action.payload.height,
+        x: action.payload.x !== undefined ? action.payload.x : sizes[key]?.x,
+        y: action.payload.y !== undefined ? action.payload.y : sizes[key]?.y,
         hidden: false
       };
       return { ...state, businessCardSizes: sizes };
     }
 
     case 'DELETE_BUSINESS_CARD_SLOT': {
+      const key = getCardSizeKey(action.payload, state.pageLayouts, state.globalLayout);
       const sizes = { ...state.businessCardSizes };
-      sizes[action.payload] = {
-        ...sizes[action.payload],
+      sizes[key] = {
+        ...sizes[key],
         hidden: true
       };
       const newCardPhotos = [...state.cardPhotos];
@@ -752,96 +980,99 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const gIdx = action.payload;
       const sizes = { ...state.businessCardSizes };
 
-      // Helper to dynamically calculate page layout and start index of card index
-      const getPageInfo = (cardIndex: number) => {
-        let currentPhotoIndex = 0;
-        let pageIdx = 0;
-        const LAYOUTS_LIST = [
-          { id: 'businesscard', capacity: 10 },
-          { id: 'businesscard-form', capacity: 6 },
-          { id: 'businesscard-form-reverse', capacity: 6 }
-        ];
-        while (true) {
-          let layoutId = state.pageLayouts[pageIdx] || state.globalLayout;
-          const layoutDef = LAYOUTS_LIST.find(l => l.id === layoutId) || { id: 'businesscard', capacity: 10 };
-          const capacity = layoutDef.capacity;
-          if (cardIndex >= currentPhotoIndex && cardIndex < currentPhotoIndex + capacity) {
-            return { pageIndex: pageIdx, startIndex: currentPhotoIndex, layoutId };
-          }
-          currentPhotoIndex += capacity;
-          pageIdx++;
-          if (pageIdx > 1000) break;
-        }
-        return { pageIndex: 0, startIndex: 0, layoutId: state.globalLayout };
-      };
+      const { startIndex, layoutId } = getPageInfo(gIdx, state.pageLayouts, state.globalLayout);
+      const isForm = layoutId !== 'businesscard' && gIdx === startIndex;
+      const key = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+      const restoringWidth = sizes[key]?.width || 101.5;
+      const restoringHeight = sizes[key]?.height || (isForm ? 290 : 58);
 
-      const { startIndex, layoutId } = getPageInfo(gIdx);
-      const isForm = gIdx === startIndex;
-      const restoringWidth = sizes[gIdx]?.width || 101.5;
-      const restoringHeight = sizes[gIdx]?.height || (isForm ? 290 : 58);
-
-      sizes[gIdx] = {
-        ...sizes[gIdx],
+      sizes[key] = {
+        ...sizes[key],
         width: restoringWidth,
         height: restoringHeight,
         hidden: false
       };
 
       // Balance card heights to prevent page overflow
-      if (!isForm && (layoutId === 'businesscard-form' || layoutId === 'businesscard-form-reverse')) {
+      if (!isForm) {
         const visibleCards = [];
-        for (let i = 1; i <= 5; i++) {
-          const idx = startIndex + i;
-          const cardSize = sizes[idx];
-          // If cardSize is undefined, it means it's an unmodified card, which is visible and has height 58.
-          if (idx === gIdx || !cardSize?.hidden) {
-            visibleCards.push({
-              index: idx,
-              height: idx === gIdx ? restoringHeight : (cardSize?.height || 58)
-            });
-          }
-        }
+        let shouldBalance = false;
 
-        let totalHeight = visibleCards.reduce((sum, c) => sum + c.height, 0);
-        if (totalHeight > 290) {
-          let overflow = totalHeight - 290;
-
-          // Shrink cards that are larger than 58 first
-          const enlargedCards = visibleCards.filter(c => c.height > 58);
-          const capacity = enlargedCards.reduce((sum, c) => sum + (c.height - 58), 0);
-
-          if (capacity >= overflow) {
-            enlargedCards.forEach(c => {
-              const reduction = overflow * (c.height - 58) / capacity;
-              c.height -= reduction;
-            });
-          } else {
-            enlargedCards.forEach(c => {
-              c.height = 58;
-            });
-            overflow -= capacity;
-
-            // Shrink further down to 10 if needed
-            const capacity2 = visibleCards.reduce((sum, c) => sum + (c.height - 10), 0);
-            if (capacity2 >= overflow) {
-              visibleCards.forEach(c => {
-                const reduction = overflow * (c.height - 10) / capacity2;
-                c.height -= reduction;
+        if (layoutId === 'businesscard') {
+          shouldBalance = true;
+          const isEven = gIdx % 2 === 0;
+          const offsets = isEven ? [0, 2, 4, 6, 8] : [1, 3, 5, 7, 9];
+          
+          offsets.forEach(offset => {
+            const idx = startIndex + offset;
+            const idxKey = getCardSizeKey(idx, state.pageLayouts, state.globalLayout);
+            const cardSize = sizes[idxKey];
+            if (idx === gIdx || !cardSize?.hidden) {
+              visibleCards.push({
+                index: idx,
+                key: idxKey,
+                height: idx === gIdx ? restoringHeight : (cardSize?.height || 58)
               });
-            } else {
-              visibleCards.forEach(c => {
-                c.height = 10;
+            }
+          });
+        } else if (layoutId === 'businesscard-form' || layoutId === 'businesscard-form-reverse') {
+          shouldBalance = true;
+          for (let i = 1; i <= 5; i++) {
+            const idx = startIndex + i;
+            const idxKey = getCardSizeKey(idx, state.pageLayouts, state.globalLayout);
+            const cardSize = sizes[idxKey];
+            if (idx === gIdx || !cardSize?.hidden) {
+              visibleCards.push({
+                index: idx,
+                key: idxKey,
+                height: idx === gIdx ? restoringHeight : (cardSize?.height || 58)
               });
             }
           }
+        }
 
-          // Write back precise heights (without rounding, to prevent CSS overflow due to subpixel rendering)
-          visibleCards.forEach(c => {
-            sizes[c.index] = {
-              ...sizes[c.index],
-              height: c.height
-            };
-          });
+        if (shouldBalance) {
+          let totalHeight = visibleCards.reduce((sum, c) => sum + c.height, 0);
+          if (totalHeight > 290) {
+            let overflow = totalHeight - 290;
+
+            // Shrink cards that are larger than 58 first
+            const enlargedCards = visibleCards.filter(c => c.height > 58);
+            const capacity = enlargedCards.reduce((sum, c) => sum + (c.height - 58), 0);
+
+            if (capacity >= overflow) {
+              enlargedCards.forEach(c => {
+                const reduction = overflow * (c.height - 58) / capacity;
+                c.height -= reduction;
+              });
+            } else {
+              enlargedCards.forEach(c => {
+                c.height = 58;
+              });
+              overflow -= capacity;
+
+              // Shrink further down to 10 if needed
+              const capacity2 = visibleCards.reduce((sum, c) => sum + (c.height - 10), 0);
+              if (capacity2 >= overflow) {
+                visibleCards.forEach(c => {
+                  const reduction = overflow * (c.height - 10) / capacity2;
+                  c.height -= reduction;
+                });
+              } else {
+                visibleCards.forEach(c => {
+                  c.height = 10;
+                });
+              }
+            }
+
+            // Write back precise heights (without rounding, to prevent CSS overflow due to subpixel rendering)
+            visibleCards.forEach(c => {
+              sizes[c.key] = {
+                ...sizes[c.key],
+                height: c.height
+              };
+            });
+          }
         }
       }
 
@@ -856,6 +1087,22 @@ const appReducer = (state: AppState, action: Action): AppState => {
           ...state.qrCodeData,
           ...action.payload
         }
+      };
+
+    // Stamp Creator Reducers
+    case 'UPDATE_STAMP_DATA':
+      return {
+        ...state,
+        stampData: {
+          ...state.stampData,
+          ...action.payload
+        }
+      };
+
+    case 'RESET_STAMP_DATA':
+      return {
+        ...state,
+        stampData: initialState.stampData
       };
     
     default:

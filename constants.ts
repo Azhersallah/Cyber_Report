@@ -15,6 +15,7 @@ export const LAYOUTS: { id: LayoutType; label: string; capacity: number }[] = [
   { id: 'businesscard', label: 'nav.businesscard', capacity: 10 },
   { id: 'businesscard-form', label: 'card.formLayout', capacity: 6 },
   { id: 'businesscard-form-reverse', label: 'card.formLayout', capacity: 6 },
+
   { id: 'idphoto', label: 'nav.idphoto', capacity: 4 },
   { id: 'idphoto-1', label: 'nav.idphoto', capacity: 1 },
   { id: 'idphoto-2', label: 'nav.idphoto', capacity: 2 },
@@ -24,9 +25,7 @@ export const LAYOUTS: { id: LayoutType; label: string; capacity: number }[] = [
 export const FONTS = [
   'Inter',
   'Noto Kufi Arabic', 
-  'Noto Naskh Arabic', 
-  'Arial', 
-  'Courier New'
+  'Noto Naskh Arabic'
 ];
 
 export const COLORS = [

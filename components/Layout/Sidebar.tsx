@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { useApp } from '../../store/AppContext';
+import { useApp, getCardSizeKey } from '../../store/AppContext';
 import {
     Layout, Grid, FileText, Check, X, ArrowLeftRight, Hash,
     Move, ArrowUp, Scaling, ChevronLeft, ChevronRight,
     Layers, ImagePlus, User, Briefcase, GraduationCap, Award, Camera, Languages, Trash2, Palette,
-    Phone, Image, PenTool, Building2, Download, Smartphone, Plus
+    Phone, Image, PenTool, Building2, Download, Smartphone, Plus, CreditCard,
+    Stamp, Sparkles, Sliders, Type, Upload, Star, Loader2, ChevronDown
 } from 'lucide-react';
+import { getStampPresets } from '../../utils/stampPresets';
 import { LAYOUTS } from '../../constants';
 import { getTranslation } from '../../utils/translations';
 import { LayoutPreview } from './LayoutPreview';
@@ -19,6 +21,9 @@ import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '../ui/
 import { cn } from '../../lib/utils';
 import { useToast } from '../ui/toast';
 import ExportFormatDialog from '../Modals/ExportFormatDialog';
+import { FontPicker } from '../ui/font-picker';
+import ImageEditor from '../Editor/ImageEditor';
+
 import type { ResumeSection } from '../Resume/ResumeEditor';
 import type { BusinessCardSection } from '../BusinessCard/BusinessCardEditor';
 
@@ -95,6 +100,205 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
     const [showResumeExportDialog, setShowResumeExportDialog] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
 
+    // Stamp Mode Local States
+    const stampCanvasRef = useRef<HTMLCanvasElement>(null);
+    const stampFileInputRef = useRef<HTMLInputElement>(null);
+    const [isProcessingStampImg, setIsProcessingStampImg] = useState(false);
+    const [rawStampImg, setRawStampImg] = useState<string | null>(null);
+    const [newText, setNewText] = useState('');
+    const [newTextType, setNewTextType] = useState<'curve-up' | 'straight' | 'curve-down'>('straight');
+    const [editingLogoPhoto, setEditingLogoPhoto] = useState<Photo | null>(null);
+    const [shapeDropdownOpen, setShapeDropdownOpen] = useState(false);
+    const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
+    const shapeDropdownRef = useRef<HTMLDivElement>(null);
+    const templateDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Re-read saved designs from localStorage whenever template dropdown opens
+    const openTemplateDropdown = () => {
+        setTemplateDropdownOpen(p => !p);
+        setShapeDropdownOpen(false);
+    };
+
+    const STAMP_COLORS = [
+      { name: 'Dark Blue', value: '#1e3a8a' },
+      { name: 'Red', value: '#dc2626' },
+      { name: 'Green', value: '#16a34a' },
+      { name: 'Black', value: '#000000' },
+      { name: 'Purple', value: '#6b21a8' },
+      { name: 'Navy', value: '#0f172a' },
+    ];
+
+    const STAMP_FONTS = [
+      'Inter',
+      'Arial',
+      'Courier New',
+      'Georgia',
+      'Times New Roman',
+      'Impact',
+      'Comic Sans MS'
+    ];
+
+    const extractStampSignature = (imgSource: string, thresholdValue: number) => {
+        const img = new window.Image();
+        img.src = imgSource;
+        img.onload = () => {
+            const canvas = stampCanvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const scale = Math.min(1, 400 / Math.max(img.width, img.height));
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+                if (gray > thresholdValue) {
+                    data[i + 3] = 0;
+                } else {
+                    data[i] = 0;
+                    data[i + 1] = 0;
+                    data[i + 2] = 0;
+                    if (data[i + 3] > 0) {
+                        data[i + 3] = 255;
+                    }
+                }
+            }
+
+            ctx.putImageData(imgData, 0, 0);
+            const transparentPNG = canvas.toDataURL('image/png');
+            dispatch({ type: 'UPDATE_STAMP_DATA', payload: { centerImage: transparentPNG } });
+            setIsProcessingStampImg(false);
+        };
+    };
+
+    const handleStampImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsProcessingStampImg(true);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const src = event.target?.result as string;
+            setRawStampImg(src);
+            extractStampSignature(src, state.stampData.signatureThreshold);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    useEffect(() => {
+        if (rawStampImg) {
+            extractStampSignature(rawStampImg, state.stampData.signatureThreshold);
+        }
+    }, [state.stampData.signatureThreshold]);
+
+    useEffect(() => {
+        if (state.mode !== 'stamp') return;
+        const currentLayers = state.stampData.layers || [];
+        const legacyLogo = state.stampData.centerImage;
+        const legacyOuter = state.stampData.outerText;
+        const legacyInner = state.stampData.innerText;
+        const legacyCenter = state.stampData.centerText;
+        const legacyExtra = state.stampData.extraCenterText;
+        
+        const hasLogoLayer = currentLayers.some(l => l.type === 'logo');
+        const outerLayer = currentLayers.find(l => l.id === 'outerText' || (l.type === 'text' && l.textType === 'curve-up'));
+        const innerLayer = currentLayers.find(l => l.id === 'innerText' || (l.type === 'text' && l.textType === 'curve-down'));
+        const centerLayer = currentLayers.find(l => l.id === 'centerText');
+        const extraLayer = currentLayers.find(l => l.id === 'extraCenterText');
+        
+        let needsSync = false;
+        if (!!legacyLogo !== hasLogoLayer) needsSync = true;
+        if ((legacyOuter || '') !== (outerLayer?.text || '')) needsSync = true;
+        if ((legacyInner || '') !== (innerLayer?.text || '')) needsSync = true;
+        if ((legacyCenter || '') !== (centerLayer?.text || '')) needsSync = true;
+        if ((legacyExtra || '') !== (extraLayer?.text || '')) needsSync = true;
+        
+        if (needsSync) {
+            const newLayers = [];
+            if (legacyLogo) {
+                newLayers.push({
+                    id: 'logo',
+                    type: 'logo' as const,
+                    offsetX: state.stampData.centerImageOffsetX || 0,
+                    offsetY: state.stampData.centerImageOffsetY || 0,
+                });
+            }
+            if (legacyOuter) {
+                newLayers.push({
+                    id: 'outerText',
+                    type: 'text' as const,
+                    textType: 'curve-up' as const,
+                    text: legacyOuter,
+                    fontFamily: state.stampData.outerFontFamily || state.stampData.fontFamily || 'Inter',
+                    fontSize: state.stampData.outerFontSize || 38,
+                    radiusOffset: state.stampData.outerRadiusOffset || -20,
+                    offsetX: state.stampData.outerTextOffsetX || 0,
+                    offsetY: state.stampData.outerTextOffsetY || 0,
+                });
+            }
+            if (legacyInner) {
+                newLayers.push({
+                    id: 'innerText',
+                    type: 'text' as const,
+                    textType: 'curve-down' as const,
+                    text: legacyInner,
+                    fontFamily: state.stampData.innerFontFamily || state.stampData.fontFamily || 'Inter',
+                    fontSize: state.stampData.innerFontSize || 38,
+                    radiusOffset: state.stampData.innerRadiusOffset || -50,
+                    offsetX: state.stampData.innerTextOffsetX || 0,
+                    offsetY: state.stampData.innerTextOffsetY || 0,
+                });
+            }
+            if (legacyCenter) {
+                newLayers.push({
+                    id: 'centerText',
+                    type: 'text' as const,
+                    textType: 'straight' as const,
+                    text: legacyCenter,
+                    fontFamily: state.stampData.centerFontFamily || state.stampData.fontFamily || 'Inter',
+                    fontSize: state.stampData.centerFontSize || 42,
+                    radiusOffset: 0,
+                    offsetX: state.stampData.centerTextOffsetX || 0,
+                    offsetY: state.stampData.centerTextOffsetY || 0,
+                });
+            }
+            if (legacyExtra) {
+                newLayers.push({
+                    id: 'extraCenterText',
+                    type: 'text' as const,
+                    textType: 'straight' as const,
+                    text: legacyExtra,
+                    fontFamily: state.stampData.extraCenterFontFamily || state.stampData.fontFamily || 'Inter',
+                    fontSize: state.stampData.extraCenterFontSize || 24,
+                    radiusOffset: 0,
+                    offsetX: state.stampData.extraCenterTextOffsetX || 0,
+                    offsetY: state.stampData.extraCenterTextOffsetY || 0,
+                });
+            }
+            dispatch({
+                type: 'UPDATE_STAMP_DATA',
+                payload: { layers: newLayers }
+            });
+        }
+    }, [
+        state.mode,
+        state.stampData.centerImage,
+        state.stampData.outerText,
+        state.stampData.innerText,
+        state.stampData.centerText,
+        state.stampData.extraCenterText,
+    ]);
+
+
     // Get app version from package.json or electron
     useEffect(() => {
         const getVersion = async () => {
@@ -112,6 +316,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
             }
         };
         getVersion();
+    }, []);
+
+    // Click-outside: close stamp dropdowns
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (shapeDropdownRef.current && !shapeDropdownRef.current.contains(e.target as Node)) {
+                setShapeDropdownOpen(false);
+            }
+            if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target as Node)) {
+                setTemplateDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
     }, []);
 
     // Defensive defaults for new settings
@@ -168,15 +386,25 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
     };
 
     const handleLayoutClick = (id: string) => {
-        if (id === '2') dispatch({ type: 'SET_LAYOUT', payload: state.globalLayout === '2' ? '2col' : '2' });
-        else if (id === '1text') dispatch({ type: 'SET_LAYOUT', payload: state.globalLayout === '1text' ? '1text-side' : '1text' });
-        else dispatch({ type: 'SET_LAYOUT', payload: id as any });
+        const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
+        const currentActiveLayout = state.pageLayouts[targetPageIndex] || state.globalLayout;
+        
+        let newLayout = id as any;
+        if (id === '2') newLayout = currentActiveLayout === '2' ? '2col' : '2';
+        else if (id === '1text') newLayout = currentActiveLayout === '1text' ? '1text-side' : '1text';
+
+        if (state.selectedPageIndex !== null) {
+            dispatch({ type: 'SET_PAGE_LAYOUT', payload: { pageIndex: state.selectedPageIndex, layout: newLayout } });
+        } else {
+            dispatch({ type: 'SET_LAYOUT', payload: newLayout });
+        }
     };
 
     const getLayoutButtonData = (layout: typeof LAYOUTS[0]) => {
-        if (layout.id === '2') return { isActive: state.globalLayout === '2' || state.globalLayout === '2col', previewType: state.globalLayout === '2col' ? '2col' : '2', label: state.globalLayout === '2col' ? 'layout.2col' : 'layout.2', isToggle: true };
-        if (layout.id === '1text') return { isActive: state.globalLayout === '1text' || state.globalLayout === '1text-side', previewType: state.globalLayout === '1text-side' ? '1text-side' : '1text', label: state.globalLayout === '1text-side' ? 'layout.1text-side' : 'layout.1text', isToggle: true };
-        return { isActive: state.globalLayout === layout.id, previewType: layout.id, label: layout.label, isToggle: false };
+        const activeLayout = state.selectedPageIndex !== null ? (state.pageLayouts[state.selectedPageIndex] || state.globalLayout) : state.globalLayout;
+        if (layout.id === '2') return { isActive: activeLayout === '2' || activeLayout === '2col', previewType: activeLayout === '2col' ? '2col' : '2', label: activeLayout === '2col' ? 'layout.2col' : 'layout.2', isToggle: true };
+        if (layout.id === '1text') return { isActive: activeLayout === '1text' || activeLayout === '1text-side', previewType: activeLayout === '1text-side' ? '1text-side' : '1text', label: activeLayout === '1text-side' ? 'layout.1text-side' : 'layout.1text', isToggle: true };
+        return { isActive: activeLayout === layout.id, previewType: layout.id, label: layout.label, isToggle: false };
     };
 
     const updateInvoiceSettings = (key: string, value: any) => dispatch({ type: 'UPDATE_SETTINGS', payload: { [key]: value } });
@@ -371,8 +599,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
 
     return (
         <aside className={cn(
-            "bg-background border-r border-border flex-shrink-0 flex flex-col h-[calc(100vh-56px)] no-print",
-            state.mode === 'resume' ? 'w-56' : 'w-72'
+            "bg-background border-r border-border flex-shrink-0 flex flex-col h-[calc(100vh-56px)] no-print select-none",
+            state.mode === 'resume' ? 'w-56' : state.mode === 'stamp' ? 'w-[350px]' : 'w-80'
         )}>
             {/* Photos mode - Upload button at very top */}
             {state.mode === 'photos' && (
@@ -425,6 +653,52 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                 <div className="p-4 border-b border-border space-y-4">
                     {/* Hidden input for potential future use */}
                     <input type="file" ref={idInputRef} className="hidden" accept="image/*,.heic,.heif" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; try { const src = await readFileAsDataURL(file); dispatch({ type: 'ADD_PHOTOS', payload: [{ id: generateId(), name: file.name, src, rotation: 0, annotations: [] }] }); } catch (err) { } if (idInputRef.current) idInputRef.current.value = ''; }} />
+
+                    {/* Upload and wireless buttons */}
+                    <div className="space-y-2">
+                        <Button onClick={() => idInputRef.current?.click()} className="w-full">
+                            <ImagePlus size={16} /> {t('upload.image')}
+                        </Button>
+                        <Button onClick={() => setShowTransferModal(true)} variant="outline" className="w-full" size="sm">
+                            <Smartphone size={14} /> {t('transfer.startShort')}
+                        </Button>
+                    </div>
+
+                    {/* ID Photo Type Selection */}
+                    <Section title={state.language === 'ku' ? 'جۆری وێنە' : state.language === 'ar' ? 'نوع الصورة' : 'Photo Type'} icon={CreditCard}>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => dispatch({ type: 'UPDATE_SETTINGS', payload: { idPhotoType: 'standard' } })}
+                                className={`relative p-2.5 rounded-md border flex flex-col items-center justify-center gap-1.5 transition-all ${(state.settings.idPhotoType ?? 'standard') === 'standard' ? 'border-foreground bg-accent' : 'border-border hover:border-foreground/60 hover:bg-muted/50'}`}
+                            >
+                                {/* Mini preview: 3×4 grid */}
+                                <div className="grid grid-cols-3 gap-0.5 pointer-events-none">
+                                    {Array(12).fill(null).map((_, i) => (
+                                        <div key={i} className="w-2 h-[11px] bg-foreground/30 rounded-[1px]" />
+                                    ))}
+                                </div>
+                                <span className={`text-[9px] font-medium text-center ${(state.settings.idPhotoType ?? 'standard') === 'standard' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                    {state.language === 'ku' ? 'نۆرمال فۆتۆ' : state.language === 'ar' ? 'صورة عادية' : 'Normal Photo'}
+                                </span>
+                                {(state.settings.idPhotoType ?? 'standard') === 'standard' && <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-foreground rounded-full flex items-center justify-center"><Check size={8} className="text-background" /></div>}
+                            </button>
+                            <button
+                                onClick={() => dispatch({ type: 'UPDATE_SETTINGS', payload: { idPhotoType: 'passport' } })}
+                                className={`relative p-2.5 rounded-md border flex flex-col items-center justify-center gap-1.5 transition-all ${state.settings.idPhotoType === 'passport' ? 'border-foreground bg-accent' : 'border-border hover:border-foreground/60 hover:bg-muted/50'}`}
+                            >
+                                {/* Mini preview: 2×3 grid */}
+                                <div className="grid grid-cols-2 gap-0.5 pointer-events-none">
+                                    {Array(6).fill(null).map((_, i) => (
+                                        <div key={i} className="w-3 h-[15px] bg-foreground/30 rounded-[1px]" />
+                                    ))}
+                                </div>
+                                <span className={`text-[9px] font-medium text-center ${state.settings.idPhotoType === 'passport' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                    {state.language === 'ku' ? 'پاسپۆرت فۆتۆ' : state.language === 'ar' ? 'صورة جواز' : 'Passport Photo'}
+                                </span>
+                                {state.settings.idPhotoType === 'passport' && <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-foreground rounded-full flex items-center justify-center"><Check size={8} className="text-background" /></div>}
+                            </button>
+                        </div>
+                    </Section>
 
                     {/* ID Photo Layout Selection */}
                     <Section title={t('idphoto.pageLayout')} icon={Grid}>
@@ -614,6 +888,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                         <Button onClick={() => invoiceSingleRef.current?.click()} className="w-full">
                             <ImagePlus size={16} /> {t('upload.image')}
                         </Button>
+                        <Button onClick={() => setShowTransferModal(true)} variant="outline" className="w-full" size="sm">
+                            <Smartphone size={14} /> {t('transfer.startShort')}
+                        </Button>
                         <p className="text-[9px] text-muted-foreground text-center">
                             {t('upload.hint')}
                         </p>
@@ -773,60 +1050,92 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                         <p className="text-xs text-foreground/70 p-2 rounded-md bg-muted/50 border border-border">{t('card.desc')}</p>
                         
                         {/* Layout Type Toggle */}
-                        <div className="flex gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                             {(() => {
                                 const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
                                 const activePageLayout = state.pageLayouts[targetPageIndex] || state.globalLayout;
                                 
                                 const handleSetLayout = (layout: LayoutType) => {
-                                    dispatch({ type: 'SET_LAYOUT', payload: layout });
                                     if (state.selectedPageIndex !== null) {
                                         dispatch({ type: 'SET_PAGE_LAYOUT', payload: { pageIndex: state.selectedPageIndex, layout } });
+                                        
+                                        const pageIndex = state.selectedPageIndex;
+                                        const getPageStartIndex = (pIdx: number) => {
+                                            let currentPhotoIndex = 0;
+                                            for (let p = 0; p < pIdx; p++) {
+                                                let layoutId = state.pageLayouts[p] || state.globalLayout;
+                                                const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
+                                                currentPhotoIndex += layoutDef.capacity;
+                                            }
+                                            return currentPhotoIndex;
+                                        };
+                                        const startIndex = getPageStartIndex(pageIndex);
+                                        
+                                        // Restore visibility of slots on this page for standard layouts
+                                        const capacity = layout === 'businesscard' ? 10 : 6;
+                                        for (let i = 0; i < capacity; i++) {
+                                            dispatch({
+                                                type: 'RESTORE_BUSINESS_CARD_SLOT',
+                                                payload: startIndex + i
+                                            });
+                                        }
+                                    } else {
+                                        dispatch({ type: 'SET_LAYOUT', payload: layout });
                                     }
                                 };
 
-                                return (
-                                    <>
-                                        <Button 
-                                            onClick={() => handleSetLayout('businesscard')}
-                                            variant={activePageLayout === 'businesscard' ? 'default' : 'outline'}
-                                            size="sm" 
-                                            className="flex-1"
+                                const layoutsData = [
+                                    { id: 'businesscard', label: 'card.gridLayout', preview: 'businesscard' },
+                                    { id: 'businesscard-form', label: 'card.formLayout', preview: 'businesscard-form' },
+                                    { id: 'businesscard-form-reverse', label: 'card.formLayoutReverse', preview: 'businesscard-form-reverse' },
+
+                                ];
+
+                                return layoutsData.map(l => {
+                                    const isActive = activePageLayout === l.id;
+                                    return (
+                                        <button 
+                                            key={l.id} 
+                                            onClick={() => handleSetLayout(l.id as LayoutType)} 
+                                            className={`relative p-2 rounded-md border flex flex-col items-center justify-center gap-1.5 transition-all group ${isActive ? 'border-foreground bg-accent' : 'border-border hover:border-foreground/60 hover:bg-muted/50'}`}
                                         >
-                                            <Grid size={14} /> {t('card.gridLayout')}
-                                        </Button>
-                                        <Button 
-                                            onClick={() => handleSetLayout('businesscard-form')}
-                                            variant={activePageLayout === 'businesscard-form' || activePageLayout === 'businesscard-form-reverse' ? 'default' : 'outline'}
-                                            size="sm" 
-                                            className="flex-1"
-                                        >
-                                            <FileText size={14} /> {t('card.formLayout')}
-                                        </Button>
-                                    </>
-                                );
+                                            <LayoutPreview type={l.preview} />
+                                            <span className={`text-[9px] font-medium text-center leading-tight ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {t(l.label)}
+                                            </span>
+                                            {isActive && (
+                                                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-foreground rounded-full flex items-center justify-center">
+                                                    <Check size={8} className="text-background" />
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                });
                             })()}
                         </div>
                         
-                        <div className="flex flex-col gap-2">
-                            <input type="file" ref={frontInputRef} className="hidden" accept="image/*,.heic,.heif" onChange={(e) => handleFill(e, 'right')} />
-                            <Button onClick={() => frontInputRef.current?.click()} variant="outline" size="sm" className="w-full">
-                                <Scaling size={14} /> {(() => {
-                                    const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
-                                    const activePageLayout = state.pageLayouts[targetPageIndex] || state.globalLayout;
-                                    return (activePageLayout === 'businesscard-form' || activePageLayout === 'businesscard-form-reverse') ? t('card.fillSmall') : t('card.fillFront');
-                                })()}
-                            </Button>
-                            <input type="file" ref={backInputRef} className="hidden" accept="image/*,.heic,.heif" onChange={(e) => handleFill(e, 'left')} />
-                            <Button onClick={() => backInputRef.current?.click()} variant="outline" size="sm" className="w-full">
-                                <Scaling size={14} /> {(() => {
-                                    const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
-                                    const activePageLayout = state.pageLayouts[targetPageIndex] || state.globalLayout;
-                                    return (activePageLayout === 'businesscard-form' || activePageLayout === 'businesscard-form-reverse') ? t('card.fillForm') : t('card.fillBack');
-                                })()}
-                            </Button>
-                        </div>
+                        {(() => {
+                            const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
+                            const activePageLayout = state.pageLayouts[targetPageIndex] || state.globalLayout;
+                            const isKurdish = state.language === 'ku' || state.language === 'ar';
+                            
 
+                            return (
+                                <div className="flex flex-col gap-2">
+                                    <input type="file" ref={frontInputRef} className="hidden" accept="image/*,.heic,.heif" onChange={(e) => handleFill(e, 'right')} />
+                                    <Button onClick={() => frontInputRef.current?.click()} variant="outline" size="sm" className="w-full">
+                                        <Scaling size={14} /> {(activePageLayout === 'businesscard-form' || activePageLayout === 'businesscard-form-reverse') ? t('card.fillSmall') : t('card.fillFront')}
+                                    </Button>
+                                    <input type="file" ref={backInputRef} className="hidden" accept="image/*,.heic,.heif" onChange={(e) => handleFill(e, 'left')} />
+                                    <Button onClick={() => backInputRef.current?.click()} variant="outline" size="sm" className="w-full">
+                                        <Scaling size={14} /> {(activePageLayout === 'businesscard-form' || activePageLayout === 'businesscard-form-reverse') ? t('card.fillForm') : t('card.fillBack')}
+                                    </Button>
+                                    <Button onClick={() => setShowTransferModal(true)} variant="outline" className="w-full" size="sm">
+                                        <Smartphone size={14} /> {t('transfer.startShort')}
+                                    </Button>
+                                </div>
+                            );
+                        })()}
                         {(() => {
                             if (state.selectedBusinessCardIndex === null) return null;
                             const index = state.selectedBusinessCardIndex;
@@ -846,10 +1155,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                             };
 
                             const { startIndex, layoutId } = getPageInfoForCardIndex(index);
-                            if (layoutId !== 'businesscard-form' && layoutId !== 'businesscard-form-reverse') return null;
+                            if (layoutId !== 'businesscard' && layoutId !== 'businesscard-form' && layoutId !== 'businesscard-form-reverse') return null;
 
-                            const isForm = index === startIndex;
-                            const cardSize = state.businessCardSizes?.[index] || { width: 101.5, height: isForm ? 290 : 58, hidden: false };
+                            const isForm = layoutId !== 'businesscard' && index === startIndex;
+                            const sizeKey = getCardSizeKey(index, state.pageLayouts, state.globalLayout);
+                            const cardSize = state.businessCardSizes?.[sizeKey] || { width: 101.5, height: isForm ? 290 : 58, hidden: false };
                             const isKurdish = state.language === 'ku' || state.language === 'ar';
 
                             const handleHeightChange = (val: number) => {
@@ -858,11 +1168,29 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                                     cappedVal = 290;
                                 } else {
                                     let otherHeightSum = 0;
-                                    for (let i = 1; i <= 5; i++) {
-                                        const gIdx = startIndex + i;
-                                        if (gIdx !== index) {
-                                            if (!state.businessCardSizes?.[gIdx]?.hidden) {
-                                                otherHeightSum += state.businessCardSizes?.[gIdx]?.height || 58;
+                                    const isEven = index % 2 === 0;
+
+                                    if (layoutId === 'businesscard') {
+                                        // Grid Layout columns (Left: 0,2,4,6,8; Right: 1,3,5,7,9)
+                                        const indices = isEven ? [0, 2, 4, 6, 8] : [1, 3, 5, 7, 9];
+                                        indices.forEach(offset => {
+                                            const gIdx = startIndex + offset;
+                                            if (gIdx !== index) {
+                                                const otherKey = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+                                                if (!state.businessCardSizes?.[otherKey]?.hidden) {
+                                                    otherHeightSum += state.businessCardSizes?.[otherKey]?.height || 58;
+                                                }
+                                            }
+                                        });
+                                    } else {
+                                        // Form Layout (Cards: 1,2,3,4,5)
+                                        for (let i = 1; i <= 5; i++) {
+                                            const gIdx = startIndex + i;
+                                            if (gIdx !== index) {
+                                                const otherKey = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+                                                if (!state.businessCardSizes?.[otherKey]?.hidden) {
+                                                    otherHeightSum += state.businessCardSizes?.[otherKey]?.height || 58;
+                                                }
                                             }
                                         }
                                     }
@@ -872,6 +1200,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                                 dispatch({
                                     type: 'UPDATE_BUSINESS_CARD_SIZE',
                                     payload: { index, width: cardSize.width, height: cappedVal }
+                                });
+                            };
+
+                            const handleWidthChange = (val: number) => {
+                                let cappedVal = val;
+                                    // For grid and form layouts, cap at half the page width minus paddings (approx 101.5) or full width
+                                    // Actually, if it's form layout, it's 1 column? Wait, form is 1 column of 5 cards. It can be up to 101.5 or 200?
+                                    // The standard width is 101.5. If it's grid, it's strictly 101.5 max because there are 2 columns.
+                                    cappedVal = Math.max(10, Math.min(val, 101.5));
+                                dispatch({
+                                    type: 'UPDATE_BUSINESS_CARD_SIZE',
+                                    payload: { index, width: cappedVal, height: cardSize.height }
                                 });
                             };
 
@@ -893,8 +1233,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                                              <Input
                                                  type="number"
                                                  value={cardSize.width}
-                                                 disabled={true}
-                                                 className="h-8 text-xs bg-muted"
+                                                 onChange={(e) => handleWidthChange(Number(e.target.value))}
+                                                 onWheel={(e) => e.currentTarget.blur()}
+                                                 className="h-8 text-xs"
                                              />
                                          </div>
                                          <div className="space-y-1">
@@ -926,7 +1267,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                         {(() => {
                             const targetPageIndex = state.selectedPageIndex !== null ? state.selectedPageIndex : 0;
                             const currentLayout = state.pageLayouts?.[targetPageIndex] || state.globalLayout;
-                            if (currentLayout !== 'businesscard-form' && currentLayout !== 'businesscard-form-reverse') return null;
+                            if (currentLayout !== 'businesscard' && currentLayout !== 'businesscard-form' && currentLayout !== 'businesscard-form-reverse') return null;
 
                             const isKurdish = state.language === 'ku' || state.language === 'ar';
                             
@@ -943,14 +1284,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                             
                             const startIndex = getPageStartIndex(targetPageIndex);
                             const hiddenCards = [];
-                            for (let i = 1; i <= 5; i++) {
-                                const gIdx = startIndex + i;
-                                if (state.businessCardSizes?.[gIdx]?.hidden) {
-                                    hiddenCards.push(gIdx);
+                            
+                            if (currentLayout === 'businesscard') {
+                                for (let i = 0; i < 10; i++) {
+                                    const gIdx = startIndex + i;
+                                    const key = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+                                    if (state.businessCardSizes?.[key]?.hidden) {
+                                        hiddenCards.push(gIdx);
+                                    }
                                 }
-                            }
-                            if (state.businessCardSizes?.[startIndex]?.hidden) {
-                                hiddenCards.unshift(startIndex);
+                            } else {
+                                for (let i = 1; i <= 5; i++) {
+                                    const gIdx = startIndex + i;
+                                    const key = getCardSizeKey(gIdx, state.pageLayouts, state.globalLayout);
+                                    if (state.businessCardSizes?.[key]?.hidden) {
+                                        hiddenCards.push(gIdx);
+                                    }
+                                }
+                                const startKey = getCardSizeKey(startIndex, state.pageLayouts, state.globalLayout);
+                                if (state.businessCardSizes?.[startKey]?.hidden) {
+                                    hiddenCards.unshift(startIndex);
+                                }
                             }
 
                             if (hiddenCards.length === 0) return null;
@@ -962,10 +1316,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                                     </p>
                                     <div className="flex flex-col gap-1.5">
                                         {hiddenCards.map((gIdx) => {
-                                            const isForm = gIdx === startIndex;
+                                            const isForm = currentLayout !== 'businesscard' && gIdx === startIndex;
                                             const label = isForm 
                                                 ? (isKurdish ? 'فۆرمی سەرەکی' : 'Main Form') 
-                                                : (isKurdish ? `کارت ${gIdx - startIndex}` : `Card #${gIdx - startIndex}`);
+                                                : (isKurdish ? `کارت ${gIdx - startIndex + (currentLayout === 'businesscard' ? 1 : 0)}` : `Card #${gIdx - startIndex + (currentLayout === 'businesscard' ? 1 : 0)}`);
                                                 
                                             const handleRestore = () => {
                                                 dispatch({
@@ -1179,6 +1533,425 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                         </div>
                     </Section>
                 )}
+
+                {/* Stamp Mode Editor Sections */}
+                {state.mode === 'stamp' && (
+                    <>
+                        <Section title={t('stamp.settings') || 'Settings'} icon={Sliders}>
+                            <div className="space-y-4">
+                                {/* Ink Color Selector — single row */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-foreground">
+                                        {t('stamp.textColor') || 'Ink Color'}
+                                    </label>
+                                    <div className="flex items-center gap-1.5">
+                                        {STAMP_COLORS.map((c) => (
+                                            <button
+                                                key={c.value}
+                                                type="button"
+                                                onClick={() => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { textColor: c.value } })}
+                                                className={cn(
+                                                    "w-6 h-6 rounded-full border-2 border-border transition-all hover:scale-110 relative flex-shrink-0 flex items-center justify-center shadow-sm",
+                                                    state.stampData.textColor === c.value && "ring-2 ring-primary ring-offset-1 ring-offset-background scale-110"
+                                                )}
+                                                style={{ backgroundColor: c.value }}
+                                                title={c.name}
+                                            >
+                                                {state.stampData.textColor === c.value && <Check size={10} className="text-white" strokeWidth={3} />}
+                                            </button>
+                                        ))}
+                                        {/* Divider */}
+                                        <div className="w-px h-5 bg-border mx-0.5 flex-shrink-0" />
+                                        {/* Custom color picker */}
+                                        <div className="relative w-6 h-6 rounded-full border-2 border-border overflow-hidden flex-shrink-0 cursor-pointer shadow-sm" title="Custom color">
+                                            <input
+                                                type="color"
+                                                value={state.stampData.textColor}
+                                                onChange={(e) => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { textColor: e.target.value } })}
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer scale-150"
+                                            />
+                                            <div className="w-full h-full rounded-full" style={{ backgroundColor: state.stampData.textColor }} />
+                                        </div>
+                                        <span className="text-[10px] text-muted-foreground font-mono uppercase leading-none">{state.stampData.textColor}</span>
+                                    </div>
+                                </div>
+
+                                {/* Shape + Template Dropdowns — side by side */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    {/* Shape Dropdown */}
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{t('stamp.shape') || 'Shape'}</label>
+                                        <div className="relative" ref={shapeDropdownRef}>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setShapeDropdownOpen(p => !p); setTemplateDropdownOpen(false); }}
+                                                className="w-full flex items-center justify-between px-2.5 py-2 bg-muted/60 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted transition-colors gap-1"
+                                            >
+                                                <span className="flex items-center gap-1.5">
+                                                    {state.stampData.shape === 'circle' && <div className="w-3.5 h-3.5 rounded-full border-2 border-current flex-shrink-0" />}
+                                                    {state.stampData.shape === 'oval' && <div className="w-4 h-2.5 rounded-[50%] border-2 border-current flex-shrink-0" />}
+                                                    {state.stampData.shape === 'rectangle' && <div className="w-4 h-2.5 border-2 border-current rounded-sm flex-shrink-0" />}
+                                                    {state.stampData.shape === 'square' && <div className="w-3 h-3 border-2 border-current rounded-sm flex-shrink-0" />}
+                                                    <span className="capitalize truncate">{t(`stamp.shape.${state.stampData.shape}`) || state.stampData.shape}</span>
+                                                </span>
+                                                <ChevronDown size={12} className={cn("flex-shrink-0 transition-transform", shapeDropdownOpen && "rotate-180")} />
+                                            </button>
+                                            {shapeDropdownOpen && (
+                                                <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-xl z-50 p-1 flex flex-col gap-0.5 select-none">
+                                                    {(['circle', 'oval', 'rectangle', 'square'] as const).map((sh) => (
+                                                        <button
+                                                            key={sh}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                let w = 40, h = 40;
+                                                                if (sh === 'oval') { w = 55; h = 35; }
+                                                                else if (sh === 'rectangle') { w = 50; h = 25; }
+                                                                dispatch({ type: 'UPDATE_STAMP_DATA', payload: { shape: sh, width: w, height: h } });
+                                                                setShapeDropdownOpen(false);
+                                                            }}
+                                                            className={cn(
+                                                                "flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors text-left",
+                                                                state.stampData.shape === sh ? "bg-primary/10 text-primary" : "hover:bg-accent text-foreground"
+                                                            )}
+                                                        >
+                                                            {sh === 'circle' && <div className="w-3.5 h-3.5 rounded-full border-2 border-current flex-shrink-0" />}
+                                                            {sh === 'oval' && <div className="w-4 h-2.5 rounded-[50%] border-2 border-current flex-shrink-0" />}
+                                                            {sh === 'rectangle' && <div className="w-4 h-2.5 border-2 border-current rounded-sm flex-shrink-0" />}
+                                                            {sh === 'square' && <div className="w-3 h-3 border-2 border-current rounded-sm flex-shrink-0" />}
+                                                            <span className="capitalize">{t(`stamp.shape.${sh}`) || sh}</span>
+                                                            {state.stampData.shape === sh && <Check size={10} className="ml-auto flex-shrink-0" />}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Template Dropdown */}
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{state.language === 'ku' ? 'تێمپلەیت' : state.language === 'ar' ? 'قالب' : 'Template'}</label>
+                                        <div className="relative" ref={templateDropdownRef}>
+                                            <button
+                                                type="button"
+                                                onClick={openTemplateDropdown}
+                                                className="w-full flex items-center justify-between px-2.5 py-2 bg-muted/60 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted transition-colors gap-1"
+                                            >
+                                                <span className="flex items-center gap-1.5 truncate">
+                                                    <Stamp size={11} className="flex-shrink-0" />
+                                                    <span className="truncate">{state.language === 'ku' ? 'هەڵبژێرە' : state.language === 'ar' ? 'اختر' : 'Select'}</span>
+                                                </span>
+                                                <ChevronDown size={12} className={cn("flex-shrink-0 transition-transform", templateDropdownOpen && "rotate-180")} />
+                                            </button>
+                                            {templateDropdownOpen && (
+                                                <div className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-xl z-50 p-1 flex flex-col gap-0.5 select-none">
+                                                    {/* Presets Section */}
+                                                    <div className="px-2 py-1 border-b border-border/40 mb-1">
+                                                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
+                                                            {state.language === 'ku' ? 'تێمپلەیتەکان' : state.language === 'ar' ? 'القوالب' : 'Templates'}
+                                                        </span>
+                                                    </div>
+                                                    {getStampPresets(state.language).map((p) => (
+                                                        <button
+                                                            key={p.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const presetPayload: any = {
+                                                                    shape: p.shape, width: p.width, height: p.height,
+                                                                    outerText: p.outerText, innerText: p.innerText, centerText: p.centerText,
+                                                                    textColor: p.textColor, borderWidth: p.borderWidth,
+                                                                    fontFamily: p.fontFamily || 'Inter',
+                                                                    outerFontFamily: p.outerFontFamily || 'Inter',
+                                                                    innerFontFamily: p.innerFontFamily || 'Inter',
+                                                                    centerFontFamily: p.centerFontFamily || 'Inter',
+                                                                    fontSize: p.fontSize, outerFontSize: p.outerFontSize,
+                                                                    innerFontSize: p.innerFontSize, centerFontSize: p.centerFontSize,
+                                                                    outerRadiusOffset: p.outerRadiusOffset || 0,
+                                                                    innerRadiusOffset: p.innerRadiusOffset || 0,
+                                                                    hasInnerRing: p.hasInnerRing, hasDottedRing: p.hasDottedRing,
+                                                                    hasStars: p.hasStars, starCount: p.starCount || 2,
+                                                                    distressEffect: p.distressEffect || 0,
+                                                                    letterSpacing: p.letterSpacing || 0,
+                                                                    centerImage: (p as any).centerImage || null,
+                                                                    layers: [], selectedLayerId: null,
+                                                                    activeSavedDesignId: null // Reset active saved design since we loaded a preset
+                                                                };
+                                                                dispatch({ type: 'UPDATE_STAMP_DATA', payload: presetPayload });
+                                                                setTemplateDropdownOpen(false);
+                                                            }}
+                                                            className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors text-left hover:bg-accent text-foreground"
+                                                        >
+                                                            <div
+                                                                className={cn(
+                                                                    "flex-shrink-0 border-2",
+                                                                    p.shape === 'circle' ? "w-4 h-4 rounded-full" :
+                                                                    p.shape === 'oval' ? "w-5 h-3 rounded-[50%]" :
+                                                                    p.shape === 'square' ? "w-3.5 h-3.5 rounded-sm" :
+                                                                    "w-5 h-3 rounded-sm"
+                                                                )}
+                                                                style={{ borderColor: p.textColor }}
+                                                            />
+                                                            <span className="truncate">{t(p.nameKey) || p.nameKey}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Stamp Size Fields */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-foreground">
+                                            {state.language === 'ku' ? 'پانی' : state.language === 'ar' ? 'العرض' : 'Width'} (mm)
+                                        </label>
+                                        <div className="flex items-center gap-2 bg-muted px-2 py-1.5 rounded-md border border-border">
+                                            <input 
+                                                type="number" 
+                                                min={15} 
+                                                max={120} 
+                                                value={state.stampData.width}
+                                                onChange={(e) => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { width: Math.max(15, parseInt(e.target.value) || 15) } })}
+                                                className="w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none"
+                                            />
+                                            <span className="text-[10px] text-muted-foreground font-mono">mm</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-foreground text-opacity-80">
+                                            {state.language === 'ku' ? 'بەرزی' : state.language === 'ar' ? 'الارتفاع' : 'Height'} (mm)
+                                        </label>
+                                        <div className="flex items-center gap-2 bg-muted px-2 py-1.5 rounded-md border border-border">
+                                            <input 
+                                                type="number" 
+                                                min={15} 
+                                                max={120} 
+                                                value={state.stampData.height}
+                                                disabled={state.stampData.shape === 'circle' || state.stampData.shape === 'square'}
+                                                onChange={(e) => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { height: Math.max(15, parseInt(e.target.value) || 15) } })}
+                                                className="w-full bg-transparent text-sm font-semibold text-foreground focus:outline-none disabled:opacity-50"
+                                            />
+                                            <span className="text-[10px] text-muted-foreground font-mono">mm</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Border width — slider */}
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs font-medium text-foreground">
+                                        <span>{t('stamp.borderWidth') || 'Border Thickness'}</span>
+                                        <span className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded border border-border/50">{state.stampData.borderWidth}px</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min={1}
+                                        max={15}
+                                        step={0.5}
+                                        value={state.stampData.borderWidth}
+                                        onChange={(e) => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { borderWidth: parseFloat(e.target.value) } })}
+                                        className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                                    />
+                                </div>
+
+                                {/* Ring & Stars Toggles */}
+                                <div className="space-y-2 pt-2 border-t border-border/50">
+                                    {/* Inner Ring Toggle */}
+                                    <div className="flex items-center justify-between bg-muted/20 p-2 rounded-md border border-border/50">
+                                        <span className="text-xs text-foreground font-medium select-none">{t('stamp.hasInnerRing') || 'Inner Ring'}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { hasInnerRing: !state.stampData.hasInnerRing } })}
+                                            className={cn(
+                                                "w-8 h-4 rounded-full transition-colors relative focus:outline-none border border-border",
+                                                state.stampData.hasInnerRing ? "bg-primary" : "bg-muted"
+                                            )}
+                                        >
+                                            <div className={cn("w-3 h-3 bg-background rounded-full absolute top-[1px] transition-transform shadow-sm", state.stampData.hasInnerRing ? "right-[1px]" : "left-[1px]")} />
+                                        </button>
+                                    </div>
+
+                                    {state.stampData.shape === 'circle' && (
+                                        <>
+                                            {/* Dotted Ring Toggle */}
+                                            <div className="flex items-center justify-between bg-muted/20 p-2 rounded-md border border-border/50">
+                                                <span className="text-xs text-foreground font-medium select-none">{t('stamp.hasDottedRing') || 'Dotted Ring'}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { hasDottedRing: !state.stampData.hasDottedRing } })}
+                                                    className={cn(
+                                                        "w-8 h-4 rounded-full transition-colors relative focus:outline-none border border-border",
+                                                        state.stampData.hasDottedRing ? "bg-primary" : "bg-muted"
+                                                    )}
+                                                >
+                                                    <div className={cn("w-3 h-3 bg-background rounded-full absolute top-[1px] transition-transform shadow-sm", state.stampData.hasDottedRing ? "right-[1px]" : "left-[1px]")} />
+                                                </button>
+                                            </div>
+
+                                            {/* Stars Toggle */}
+                                            <div className="flex items-center justify-between bg-muted/20 p-2 rounded-md border border-border/50">
+                                                <span className="text-xs text-foreground font-medium select-none">{t('stamp.hasStars') || 'Separator Stars'}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { hasStars: !state.stampData.hasStars, starCount: !state.stampData.hasStars ? 2 : 0 } })}
+                                                    className={cn(
+                                                        "w-8 h-4 rounded-full transition-colors relative focus:outline-none border border-border",
+                                                        state.stampData.hasStars ? "bg-primary" : "bg-muted"
+                                                    )}
+                                                >
+                                                    <div className={cn("w-3 h-3 bg-background rounded-full absolute top-[1px] transition-transform shadow-sm", state.stampData.hasStars ? "right-[1px]" : "left-[1px]")} />
+                                                </button>
+                                            </div>
+
+                                            {state.stampData.hasStars && (
+                                                <div className="flex items-center justify-between pl-4 py-1.5 bg-muted/10 rounded-md border border-dashed border-border">
+                                                    <span className="text-[11px] text-muted-foreground font-medium select-none">{t('stamp.starCount') || 'Star Count'}</span>
+                                                    <div className="flex items-center gap-1.5 pr-2">
+                                                        {[1, 2, 4].map(num => (
+                                                            <button
+                                                                key={num}
+                                                                type="button"
+                                                                onClick={() => dispatch({ type: 'UPDATE_STAMP_DATA', payload: { starCount: num } })}
+                                                                className={cn(
+                                                                    "px-2.5 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors",
+                                                                    state.stampData.starCount === num 
+                                                                        ? "bg-primary text-white border-primary" 
+                                                                        : "bg-background text-foreground border-border hover:bg-muted"
+                                                                )}
+                                                            >
+                                                                {num}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* Text Creator Section */}
+                        <Section title={t('prop.content') || 'Text Layers'} icon={Type}>
+                            <div className="space-y-3 p-3 bg-muted/30 rounded-lg border border-border">
+                                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5 select-none">
+                                    <Type size={14} className="text-primary" />
+                                    {t('stamp.addText') || 'Add Text Layer'}
+                                </label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        value={newText}
+                                        onChange={(e) => setNewText(e.target.value)}
+                                        placeholder={t('stamp.textPlaceholder') || 'Enter text...'}
+                                        className="text-xs bg-background border-border text-foreground flex-1"
+                                    />
+                                    <Button
+                                        onClick={() => {
+                                            if (!newText.trim()) return;
+                                            const id = `text-${generateId()}`;
+                                            const newLayer = {
+                                                id,
+                                                type: 'text' as const,
+                                                textType: newTextType,
+                                                text: newText,
+                                                fontFamily: state.stampData.fontFamily || 'Inter',
+                                                fontSize: newTextType === 'straight' ? 42 : 38,
+                                                radiusOffset: newTextType === 'curve-up' ? -20 : newTextType === 'curve-down' ? -50 : 0,
+                                                offsetX: 0,
+                                                offsetY: 0,
+                                            };
+                                            const updatedLayers = [...(state.stampData.layers || []), newLayer];
+                                            
+                                            // Only push to layers — do NOT also set legacy outerText/innerText/centerText
+                                            // because the sync useEffect in StampTab would then add a SECOND layer with id 'outerText'/'centerText'
+                                            dispatch({
+                                                type: 'UPDATE_STAMP_DATA',
+                                                payload: { layers: updatedLayers, selectedLayerId: id }
+                                            });
+                                            setNewText('');
+                                        }}
+                                        className="text-xs shrink-0"
+                                        size="sm"
+                                    >
+                                        <Plus size={14} className="mr-1" />
+                                        {t('action.add') || 'Add'}
+                                    </Button>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 pt-1">
+                                    <span className="text-[10px] text-muted-foreground font-medium select-none">{t('stamp.textType') || 'Text Type'}:</span>
+                                    <div className="flex gap-1 bg-muted p-0.5 rounded-md border border-border">
+                                        {(['curve-up', 'straight', 'curve-down'] as const).map((type) => (
+                                            <button
+                                                key={type}
+                                                type="button"
+                                                onClick={() => setNewTextType(type)}
+                                                className={cn(
+                                                    "p-1.5 rounded transition-all flex items-center justify-center",
+                                                    newTextType === type 
+                                                        ? "bg-background text-primary shadow-sm border border-border/50" 
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-background/40"
+                                                )}
+                                                title={type === 'curve-up' ? t('stamp.textType.curveUp') : type === 'curve-down' ? t('stamp.textType.curveDown') : t('stamp.textType.straight')}
+                                            >
+                                                {type === 'curve-up' && (
+                                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-current fill-none" strokeWidth="2.5"><path d="M4 17C4 17 8 9 12 9C16 9 20 17 20 17"/></svg>
+                                                )}
+                                                {type === 'straight' && (
+                                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-current fill-none" strokeWidth="2.5"><path d="M4 12H20"/></svg>
+                                                )}
+                                                {type === 'curve-down' && (
+                                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 stroke-current fill-none" strokeWidth="2.5"><path d="M4 7C4 7 8 15 12 15C16 15 20 7 20 7"/></svg>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </Section>
+
+                        {/* Logo Upload & Editor Section */}
+                        <Section title={t('stamp.centerImage') || 'Logo/Signature'} icon={Upload}>
+                            <div className="space-y-3">
+                                <div className="space-y-2">
+                                    <input
+                                        type="file"
+                                        ref={stampFileInputRef}
+                                        onChange={handleStampImageUpload}
+                                        accept="image/*"
+                                        className="hidden"
+                                    />
+                                    <Button
+                                        onClick={() => stampFileInputRef.current?.click()}
+                                        className="w-full text-xs font-semibold"
+                                        disabled={isProcessingStampImg}
+                                    >
+                                        {isProcessingStampImg ? (
+                                            <>
+                                                <Loader2 className="animate-spin mr-2 h-3.5 w-3.5" />
+                                                {t('label.loading') || 'Loading...'}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="mr-1.5" size={14} />
+                                                {t('stamp.uploadLogo') || 'Upload Logo'}
+                                            </>
+                                        )}
+                                    </Button>
+
+                                    <Button
+                                        onClick={() => setShowTransferModal(true)}
+                                        variant="outline"
+                                        className="w-full text-xs font-semibold"
+                                        title={t('tooltip.receiveFromPhone') || 'Receive from Phone'}
+                                    >
+                                        <Smartphone className="mr-1.5" size={14} />
+                                        {t('transfer.fromPhone') || 'From Phone'}
+                                    </Button>
+                                </div>
+                            </div>
+                        </Section>
+                    </>
+                )}
             </div>
 
             <div className="p-3 border-t border-border">
@@ -1219,6 +1992,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
             />
 
             <WirelessTransferModal isOpen={showTransferModal} onClose={() => setShowTransferModal(false)} />
+            <canvas ref={stampCanvasRef} className="hidden" />
         </aside>
     );
 };

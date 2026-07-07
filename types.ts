@@ -1,7 +1,7 @@
 
 export type LayoutType = '1' | '2' | '2col' | '4' | '2text' | '1text' | '1text-side' | 'onlytext' | 'businesscard' | 'businesscard-form' | 'businesscard-form-reverse' | 'invoice' | 'invoice-1' | 'invoice-4' | 'idphoto' | 'idphoto-1' | 'idphoto-2' | 'idphoto-4';
 
-export type AppMode = 'photos' | 'businesscard' | 'invoice' | 'idphoto' | 'resume' | 'envelope' | 'qrcode' | 'tasks' | 'stickers';
+export type AppMode = 'photos' | 'businesscard' | 'invoice' | 'idphoto' | 'resume' | 'envelope' | 'qrcode' | 'tasks' | 'stickers' | 'stamp';
 
 // Business Card Builder Types
 export interface BusinessCardData {
@@ -152,6 +152,7 @@ export interface AppSettings {
   idPhotoPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'; // Position for single A6 layout
   idPhotoPosition2: 'top' | 'bottom' | 'left' | 'right'; // Position for 2 A6 layout
   idPhotoSlotCounts: Record<number, number>; // Per-A6 section slot count (1-12), key is section index
+  idPhotoType: 'standard' | 'passport'; // standard: 2.7x3.7cm (12/A6), passport: 3.7x4.7cm (6/A6)
 }
 
 export interface AppState {
@@ -171,6 +172,7 @@ export interface AppState {
   pageSubtitles: Record<number, string>;
   textAreas: Record<string, string>;
   pageLayouts: Record<number, LayoutType>;
+  modePageLayouts?: Record<string, Record<number, LayoutType>>; // Added for preserving layouts per tab
   currentSectionIndex: number;
   manualPageCount: number; // Tracks explicitly added pages
   selectedPageIndex: number | null; // Added for active page layout changes
@@ -187,9 +189,11 @@ export interface AppState {
   businessCardLanguage: Language; // Separate language for business card content
   // Selected Card for Custom Size / Layout Editing
   selectedBusinessCardIndex: number | null;
-  businessCardSizes: Record<number, { width: number; height: number; hidden?: boolean }>;
+  businessCardSizes: Record<string, { width: number; height: number; hidden?: boolean; x?: number; y?: number }>;
   // QR Code Generator State
   qrCodeData: QRCodeData;
+  // Stamp Creator State
+  stampData: StampData;
 }
 
 // Resume Builder Types
@@ -305,6 +309,69 @@ export interface QRCodeData {
   logoSize: number;
 }
 
+// Stamp Creator Types
+export interface StampLayer {
+  id: string;
+  type: 'text' | 'logo';
+  text?: string;
+  textType?: 'curve-up' | 'straight' | 'curve-down';
+  fontFamily?: string;
+  fontSize?: number;
+  radiusOffset?: number; // Curvature intensity
+  letterSpacing?: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export interface StampData {
+  shape: 'circle' | 'oval' | 'rectangle' | 'square';
+  width: number;
+  height: number;
+  outerText: string;
+  innerText: string;
+  centerText: string;
+  fontFamily: string; // Keep as fallback/legacy
+  outerFontFamily: string;
+  innerFontFamily: string;
+  centerFontFamily: string;
+  fontSize: number;
+  outerFontSize: number;
+  innerFontSize: number;
+  centerFontSize: number;
+  outerRadiusOffset: number;
+  innerRadiusOffset: number;
+  letterSpacing: number;
+  textColor: string;
+  borderWidth: number;
+  hasInnerRing: boolean;
+  hasDottedRing: boolean;
+  hasStars: boolean;
+  starCount: number;
+  distressEffect: number;
+  monochrome: boolean;
+  centerImage: string | null;
+  centerImageSize: number;
+  centerLayout: 'text-bottom' | 'text-top' | 'text-left' | 'text-right' | 'overlay';
+  centerImageOffsetX: number;
+  centerImageOffsetY: number;
+  centerTextOffsetX: number;
+  centerTextOffsetY: number;
+  outerTextOffsetX: number;
+  outerTextOffsetY: number;
+  innerTextOffsetX: number;
+  innerTextOffsetY: number;
+  extraCenterText: string;
+  extraCenterFontFamily: string;
+  extraCenterFontSize: number;
+  extraCenterTextOffsetX: number;
+  extraCenterTextOffsetY: number;
+  signatureThreshold: number;
+  layers?: StampLayer[];
+  selectedLayerId?: string | null;
+  activeSavedDesignId?: string | null;
+}
+
+
 export const INITIAL_SETTINGS: AppSettings = {
   userName: 'User Name',
   logo: null,
@@ -364,5 +431,6 @@ export const INITIAL_SETTINGS: AppSettings = {
   idPhotoLayout: '4', // Default to 4 A6 sections per A4 page
   idPhotoPosition: 'center', // Default position for single A6
   idPhotoPosition2: 'top', // Default position for 2 A6
-  idPhotoSlotCounts: {} // Per-A6 section slot counts (default 12 for all)
+  idPhotoSlotCounts: {}, // Per-A6 section slot counts (default 12 for all)
+  idPhotoType: 'standard' // Default to standard 2.7x3.7cm ID photo
 };

@@ -4,7 +4,8 @@ import {
   Printer, Settings, Sun, Moon, User, Type, 
   Image as ImageIcon, Save, FolderOpen, SaveAll,
   Languages, Palette, Eye, Check, Timer, Search, Replace,
-  Laptop, Layers, Scaling, X, Eraser, Trash2, Download, Sparkles, Calendar, ArrowLeftRight
+  Laptop, Layers, Scaling, X, Eraser, Trash2, Download, Sparkles, Calendar, ArrowLeftRight, MessageSquare,
+  Lock, Unlock, Plus, ChevronDown, CreditCard, FileText, Briefcase, QrCode, ClipboardList, Mail, Stamp
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { AppMode } from '../../types';
@@ -37,17 +38,19 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
     tasks: boolean;
     stickers: boolean;
     qrcode: boolean;
+    stamp: boolean;
   }>(() => {
     return {
       tasks: localStorage.getItem('seen_feature_tasks_v2') === 'true',
       stickers: localStorage.getItem('seen_feature_stickers_v2') === 'true',
       qrcode: localStorage.getItem('seen_feature_qrcode_v2') === 'true',
+      stamp: localStorage.getItem('seen_feature_stamp_v2') === 'true',
     };
   });
 
   // Automatically mark active mode as seen
   useEffect(() => {
-    if (['tasks', 'stickers', 'qrcode'].includes(state.mode)) {
+    if (['tasks', 'stickers', 'qrcode', 'stamp'].includes(state.mode)) {
       localStorage.setItem(`seen_feature_${state.mode}`, 'true');
       setSeenNewFeatures(prev => ({ ...prev, [state.mode]: true }));
     }
@@ -97,6 +100,7 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
   // Update Modal state
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+
 
   // Save lock to prevent concurrent saves (fixes corruption)
   const isSavingRef = useRef(false);
@@ -285,17 +289,98 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSettings]);
 
-  const modes: { id: AppMode; label: string; disabled?: boolean }[] = [
+  // Mode Switcher state and refs
+  const [showModeSwitcher, setShowModeSwitcher] = useState(false);
+  const modeSwitcherRef = useRef<HTMLDivElement>(null);
+
+  // Close mode switcher when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (modeSwitcherRef.current && !modeSwitcherRef.current.contains(e.target as Node)) {
+        setShowModeSwitcher(false);
+      }
+    };
+    if (showModeSwitcher) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showModeSwitcher]);
+
+  const ALL_MODES: { id: AppMode; label: string; disabled?: boolean }[] = [
     { id: 'photos', label: t('nav.photos') },
-    { id: 'businesscard', label: t('nav.businesscard') },
-    { id: 'invoice', label: t('nav.invoice') },
-    { id: 'idphoto', label: t('nav.idphoto') },
-    { id: 'resume', label: t('nav.resume') },
-    { id: 'qrcode', label: t('nav.qrcode') },
-    { id: 'stickers', label: t('nav.stickers') },
-    { id: 'tasks', label: t('nav.tasks') },
-    { id: 'envelope', label: t('nav.envelope'), disabled: true },
   ];
+
+  const getModeIcon = (modeId: AppMode) => {
+    switch (modeId) {
+      case 'photos': return ImageIcon;
+      case 'businesscard': return CreditCard;
+      case 'invoice': return FileText;
+      case 'idphoto': return User;
+      case 'resume': return Briefcase;
+      case 'qrcode': return QrCode;
+      case 'stickers': return Sparkles;
+      case 'stamp': return Stamp;
+      case 'tasks': return ClipboardList;
+      case 'envelope': return Mail;
+      default: return ImageIcon;
+    }
+  };
+
+  const getModeDescription = (modeId: AppMode, lang: 'en' | 'ku' | 'ar') => {
+    const descriptions: Record<string, Record<'en' | 'ku' | 'ar', string>> = {
+      photos: {
+        en: 'Arrange and print multiple photos and reports',
+        ku: 'ڕێکخستن و چاپکردنی فرەوێنە و ڕاپۆرت',
+        ar: 'ترتيب وطباعة الصور المتعددة والتقارير'
+      },
+      businesscard: {
+        en: 'Design and print professional business cards',
+        ku: 'دیزاین و چاپکردنی کارتی بازرگانی پیشەیی',
+        ar: 'تصميم وطباعة بطاقات العمل المهنية'
+      },
+      invoice: {
+        en: 'Create and print sales invoices',
+        ku: 'دروستکردن و چاپکردنی پسوڵەی فرۆشتن',
+        ar: 'إنشاء وطباعة فواتير المبيعات'
+      },
+      idphoto: {
+        en: 'Prepare photos for passports and ID cards',
+        ku: 'ئامادەکردنی وێنە بۆ پاسپۆرت و ناسنامە',
+        ar: 'تجهيز الصور للمعاملات والجوازات'
+      },
+      resume: {
+        en: 'Create modern professional resumes / CVs',
+        ku: 'دروستکردنی سیڤی بە شێوازی مۆدێرن',
+        ar: 'إنشاء السيرة الذاتية بشكل احترافي'
+      },
+      qrcode: {
+        en: 'Generate custom QR codes',
+        ku: 'دروستکردنی QR کۆدی جۆراوجۆر',
+        ar: 'توليد رموز الاستجابة السريعة المخصصة'
+      },
+      stickers: {
+        en: 'Design stickers and barcode labels',
+        ku: 'دیزاینکردنی ستیکەر بۆ شتومەک و لایبڵ',
+        ar: 'تصميم الملصقات وبطاقات الباركود'
+      },
+      stamp: {
+        en: 'Design and customize official company stamps',
+        ku: 'دیزاین و دروستکردنی مۆری فەرمی کۆمپانیاکان',
+        ar: 'تصميم وتخصيص الأختام الرسمية للشركات'
+      },
+      tasks: {
+        en: 'Organize daily tasks and personal notes',
+        ku: 'ڕێکخستنی ئەرکەکان و تێبینییەکان',
+        ar: 'تنظيم المهام اليومية والملاحظات الشخصية'
+      },
+      envelope: {
+        en: 'Design and print mailing envelopes (Coming Soon)',
+        ku: 'دیزاین و چاپکردنی زەرفی نامە (بەمنزیکانە)',
+        ar: 'تصميم وطباعة أظرف الرسائل (قريباً)'
+      }
+    };
+    return descriptions[modeId]?.[lang] || '';
+  };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -629,83 +714,228 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
     };
   }, [state.settings.autoSaveEnabled, state.settings.autoSaveInterval, performAutoSave]);
 
+  const getModeContextInfo = () => {
+    const isKu = state.language === 'ku';
+    const isAr = state.language === 'ar';
+    
+    switch (state.mode) {
+      case 'photos': {
+        const count = state.photos.filter(Boolean).length;
+        return isKu ? `${count} وێنە` : isAr ? `${count} صورة` : `${count} Photo${count !== 1 ? 's' : ''}`;
+      }
+      case 'idphoto': {
+        const count = state.idPhotos.filter(Boolean).length;
+        return isKu ? `${count} وێنە` : isAr ? `${count} صورة` : `${count} Photo${count !== 1 ? 's' : ''}`;
+      }
+      case 'invoice': {
+        const count = state.invoicePhotos.filter(Boolean).length;
+        return isKu ? `${count} پسوڵە` : isAr ? `${count} فاتورة` : `${count} Invoice${count !== 1 ? 's' : ''}`;
+      }
+      case 'businesscard':
+        return isKu ? 'کارت' : isAr ? 'بطاقة' : 'Card';
+      case 'resume':
+        return isKu ? 'سیڤی' : isAr ? 'سيرة ذاتية' : 'CV / Resume';
+      case 'qrcode':
+        return isKu ? 'کۆد' : isAr ? 'رمز' : 'QR Code';
+      case 'stickers':
+        return isKu ? 'ستیکەر' : isAr ? 'ملصق' : 'Stickers';
+      case 'tasks':
+        return isKu ? 'ئەرکەکان' : isAr ? 'مهام' : 'Tasks';
+      default:
+        return '';
+    }
+  };
+
   return (
-    <header className="h-14 bg-background border-b border-border flex items-center justify-between px-4 no-print sticky top-0 z-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+    <header className="h-14 bg-background/95 backdrop-blur-md border-b border-border/80 flex items-center justify-between px-4 no-print sticky top-0 z-50 transition-colors duration-200" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
       
-      {/* Logo + Navigation Tabs */}
-      <div className="flex items-end gap-3 h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <div className="w-10 h-10 rounded-md flex items-center justify-center overflow-hidden flex-shrink-0 mb-2">
-          <img src={faviconUrl} alt="Logo" className="w-full h-full" />
+      {/* Logo + Mode Switcher */}
+      <div className="flex items-center gap-3 h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 bg-accent/40 border border-border/50 shadow-sm transition-all hover:scale-105 duration-200">
+          <img src={faviconUrl} alt="Logo" className="w-full h-full p-1" />
         </div>
         
-        {/* Navigation Tabs - Connected to bottom */}
-        <nav className="flex items-end h-full">
-          {modes.map((mode) => (
-            <button
-              key={mode.id}
-              onClick={() => {
-                if (mode.disabled) {
-                  showToast(t('toast.comingSoon'), 'info');
-                } else {
-                  dispatch({ type: 'SET_MODE', payload: mode.id });
-                }
-              }}
-              className={`px-4 py-2 text-sm font-medium transition-all whitespace-nowrap relative ${
-                state.mode === mode.id
-                  ? 'bg-background text-foreground rounded-t-md border-t border-l border-r border-border -mb-px z-10'
-                  : mode.disabled
-                  ? 'text-muted-foreground/40 cursor-not-allowed rounded-t-md'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-t-md'
-              }`}
-            >
-              {mode.label}
-            </button>
-          ))}
-        </nav>
+        <div className="w-px h-5 bg-border/80 mx-1" />
+        
+        {/* Feature Switcher Dropdown */}
+        <div ref={modeSwitcherRef} className="relative h-full flex items-center">
+          <button
+            type="button"
+            onClick={() => setShowModeSwitcher(!showModeSwitcher)}
+            className="h-9 px-3.5 bg-zinc-100/90 dark:bg-zinc-800/90 hover:bg-zinc-200/90 dark:hover:bg-zinc-700/90 text-foreground rounded-lg border border-border/80 flex items-center gap-2 transition-all font-bold text-xs select-none hover:border-foreground/30 focus:outline-none focus:ring-1 focus:ring-foreground/20 shadow-sm"
+          >
+            {React.createElement(getModeIcon(state.mode), { size: 15, className: "text-foreground/80" })}
+            <span>{t(`nav.${state.mode}`)}</span>
+            <ChevronDown size={14} className={`text-muted-foreground transition-transform duration-200 ${showModeSwitcher ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {showModeSwitcher && (
+            <div className="absolute top-full mt-2 w-[460px] bg-popover/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-2xl p-3.5 z-50 flex flex-col max-h-[80vh] overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-3 duration-200 left-0 rtl:left-auto rtl:right-0" dir={state.language === 'ku' ? 'rtl' : 'ltr'}>
+              <div className="text-[11px] font-bold text-muted-foreground/80 px-2 pb-2 mb-2.5 border-b border-border/60 flex items-center justify-between">
+                <span>{state.language === 'ku' ? 'هەڵبژاردنی تایبەتمەندی' : state.language === 'ar' ? 'اختر الميزة' : 'Select Feature'}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {ALL_MODES.map((mode) => {
+                  const ModeIcon = getModeIcon(mode.id);
+                  const isActive = state.mode === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => {
+                        if (mode.disabled) {
+                          showToast(t('toast.comingSoon'), 'info');
+                        } else {
+                          dispatch({ type: 'SET_MODE', payload: mode.id });
+                          setShowModeSwitcher(false);
+                        }
+                      }}
+                      className={`flex items-start gap-3 p-2.5 rounded-xl border text-left rtl:text-right transition-all duration-150 group relative ${
+                        isActive
+                          ? 'border-foreground bg-accent text-foreground shadow-sm'
+                          : mode.disabled
+                          ? 'border-border/30 opacity-40 cursor-not-allowed bg-muted/20'
+                          : 'border-border/40 hover:border-foreground/30 bg-card hover:bg-accent/50 dark:hover:bg-accent/30'
+                      }`}
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-200 ${
+                        isActive
+                          ? 'bg-foreground text-background'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 group-hover:text-foreground group-hover:bg-zinc-200 dark:group-hover:bg-zinc-700'
+                      }`}>
+                        <ModeIcon size={16} />
+                      </div>
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className={`text-[12px] font-bold transition-colors ${isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>
+                          {mode.label}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/80 line-clamp-2 leading-normal">
+                          {getModeDescription(mode.id, state.language as any)}
+                        </span>
+                      </div>
+                      {isActive && (
+                        <div className="absolute top-2 right-2 rtl:right-auto rtl:left-2 w-1.5 h-1.5 rounded-full bg-foreground" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Center: Current Project Hub */}
+      <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-zinc-100/50 dark:bg-zinc-800/50 border border-border/60 rounded-full text-[11px] max-w-sm select-none" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <FileText size={13} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
+        <span className="font-bold text-foreground/90 truncate max-w-[120px]" title={currentFilePath || undefined}>
+          {getFileName(currentFilePath)}
+        </span>
+        <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+        <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
+          {React.createElement(getModeIcon(state.mode), { size: 12, className: "text-zinc-500" })}
+          {getModeContextInfo()}
+        </span>
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse ml-1 rtl:ml-0 rtl:mr-1 shrink-0" title={state.language === 'ku' ? 'پەیوەستکراو / سەیڤ کراوە' : 'Connected / Saved'} />
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <Button variant="ghost" size="icon" onClick={handleSave} title={t('action.save')} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600">
-            <Save size={18} />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={() => setShowSaveConfirm(true)} title={t('action.saveAs')} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600">
-            <SaveAll size={18} />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={() => setShowOpenConfirm(true)} title={t('action.openProject')} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600">
-            <FolderOpen size={18} />
-            {!isElectron && <input type="file" ref={fileInputRef} className="hidden" accept=".pppro" onChange={handleOpenProject} />}
-        </Button>
+      <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
 
-        <div className="w-px h-5 bg-border mx-1" />
-        
-        {/* Find & Replace - Only in Photos mode */}
-        {state.mode === 'photos' && (
-          <Button variant="ghost" size="icon" onClick={() => setShowFindReplace(true)} title={t('findReplace.title')} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600">
-            <Search size={18} />
+        {/* File Operations Group */}
+        <div className="flex items-center bg-zinc-100 dark:bg-zinc-800/80 border border-border/80 rounded-lg p-0.5 shadow-sm">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleSave} 
+            title={t('action.save')} 
+            className="h-8 w-8 rounded-md hover:bg-zinc-200/90 dark:hover:bg-zinc-700/90 hover:text-foreground text-muted-foreground transition-all duration-150 focus:outline-none"
+          >
+            <Save size={16} />
           </Button>
-        )}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setShowSaveConfirm(true)} 
+            title={t('action.saveAs')} 
+            className="h-8 w-8 rounded-md hover:bg-zinc-200/90 dark:hover:bg-zinc-700/90 hover:text-foreground text-muted-foreground transition-all duration-150 focus:outline-none"
+          >
+            <SaveAll size={16} />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setShowOpenConfirm(true)} 
+            title={t('action.openProject')} 
+            className="h-8 w-8 rounded-md hover:bg-zinc-200/90 dark:hover:bg-zinc-700/90 hover:text-foreground text-muted-foreground transition-all duration-150 relative focus:outline-none"
+          >
+            <FolderOpen size={16} />
+            {!isElectron && <input type="file" ref={fileInputRef} className="hidden" accept=".pppro" onChange={handleOpenProject} />}
+          </Button>
+        </div>
 
-        <Button variant="ghost" size="icon" onClick={() => setShowClearConfirm(true)} title={t('action.clear')} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600">
-          <Eraser size={18} />
-        </Button>
-
-        <Button variant="ghost" size="icon" onClick={() => setShowUpdateModal(true)} title={t('action.checkUpdates')} className="relative bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600">
-          <Download size={18} />
-          {updateAvailable && (
-            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+        {/* Utility Tools Group */}
+        <div className="flex items-center bg-zinc-100 dark:bg-zinc-800/80 border border-border/80 rounded-lg p-0.5 shadow-sm">
+          {state.mode === 'photos' && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setShowFindReplace(true)} 
+              title={t('findReplace.title')} 
+              className="h-8 w-8 rounded-md hover:bg-zinc-200/90 dark:hover:bg-zinc-700/90 hover:text-foreground text-muted-foreground transition-all duration-150 focus:outline-none"
+            >
+              <Search size={16} />
+            </Button>
           )}
-        </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setShowClearConfirm(true)} 
+            title={t('action.clear')} 
+            className="h-8 w-8 rounded-md hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-all duration-150 focus:outline-none"
+          >
+            <Eraser size={16} />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setShowUpdateModal(true)} 
+            title={t('action.checkUpdates')} 
+            className="h-8 w-8 rounded-md hover:bg-zinc-200/90 dark:hover:bg-zinc-700/90 hover:text-foreground text-muted-foreground transition-all duration-150 relative focus:outline-none"
+          >
+            <Download size={16} />
+            {updateAvailable && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+            )}
+          </Button>
+        </div>
 
-        <Button variant="default" size="icon" onClick={onPrintClick} title={t('action.print')}>
-          <Printer size={18} />
+        <div className="w-px h-5 bg-border/80 mx-0.5" />
+
+        {/* Print Button */}
+        <Button 
+          variant="default" 
+          size="sm" 
+          onClick={onPrintClick} 
+          title={t('action.print')} 
+          className="h-9 gap-1.5 px-3.5 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 rounded-lg font-bold shadow-md transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] focus:outline-none shrink-0"
+        >
+          <Printer size={16} />
+          <span className="text-xs font-bold">{t('action.print')}</span>
         </Button>
 
         {/* Settings */}
-        <div className="relative ml-1">
-            <Button variant="ghost" size="icon" onClick={() => setShowSettings(!showSettings)} className="bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600">
-              <Settings size={18} />
-            </Button>
+        <div className="relative">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setShowSettings(!showSettings)} 
+            className="h-9 w-9 bg-zinc-100/80 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-foreground rounded-lg border border-border/80 hover:border-foreground/20 transition-all duration-300 focus:outline-none shadow-sm"
+          >
+            <Settings size={16} className="hover:rotate-45 transition-transform duration-300" />
+          </Button>
         </div>
       </div>
 
@@ -1141,6 +1371,8 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
 
       {/* Find & Replace Modal */}
       <FindReplaceModal isOpen={showFindReplace} onClose={() => setShowFindReplace(false)} />
+
+
 
       {/* Update Modal */}
       <UpdateModal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} language={state.language === 'ku' ? 'ku' : 'en'} />

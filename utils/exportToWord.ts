@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, ImageRun, AlignmentType, PageBreak } from 'docx';
+import { Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell, BorderStyle, WidthType, AlignmentType, VerticalAlign, PageOrientation, PageBreak } from 'docx';
 import { AppState } from '../types';
 import html2canvas from 'html2canvas';
 
@@ -196,10 +196,11 @@ export const exportPhotosToWord = async (state: AppState): Promise<Blob> => {
               bottom: 0,
               left: 0,
             },
-            // Set page size explicitly in twips (1 inch = 1440 twips)
-            // A4: 210mm × 297mm = 8.27" × 11.69" = 11906 × 16838 twips
-            width: 11906,
-            height: 16838,
+            size: {
+              width: 11906,
+              height: 16838,
+              orientation: PageOrientation.PORTRAIT,
+            },
           },
         },
         children: paragraphs,

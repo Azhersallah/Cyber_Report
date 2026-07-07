@@ -29,66 +29,46 @@ async function getEncryptionKey(): Promise<CryptoKey> {
 }
 
 /**
- * Encrypts a string into a custom binary format (Base64 encoded string).
- * Format: [MAGIC_HEADER][IV_12_BYTES][CIPHERTEXT]
- * 
- * FIXED: Improved chunking to prevent corruption with large files
+ * NO-OP: Returns the raw JSON data string.
+ * We no longer encrypt project files, keeping them as standard human-readable JSON.
  */
 export async function encryptProjectData(data: string): Promise<string> {
-  const key = await getEncryptionKey();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoder = new TextEncoder();
-  const encodedData = encoder.encode(data);
-
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    encodedData
-  );
-
-  const combined = new Uint8Array(MAGIC_HEADER.length + iv.length + ciphertext.byteLength);
-  const headerBytes = encoder.encode(MAGIC_HEADER);
-  
-  combined.set(headerBytes, 0);
-  combined.set(iv, headerBytes.length);
-  combined.set(new Uint8Array(ciphertext), headerBytes.length + iv.length);
-
-  // Convert to Base64 safely - use smaller chunks to prevent stack overflow
-  // and memory issues with large files
-  const chunkSize = 8192; // 8KB chunks (smaller for better stability)
-  const chunks: string[] = [];
-  
-  for (let i = 0; i < combined.length; i += chunkSize) {
-    const chunk = combined.subarray(i, Math.min(i + chunkSize, combined.length));
-    // Convert chunk to string character by character (safe for all sizes)
-    let chunkStr = '';
-    for (let j = 0; j < chunk.length; j++) {
-      chunkStr += String.fromCharCode(chunk[j]);
-    }
-    chunks.push(chunkStr);
-  }
-  
-  const binary = chunks.join('');
-  return btoa(binary);
+  return data;
 }
 
 /**
  * Decrypts the custom binary format back into a JSON string.
- * 
- * FIXED: Improved error handling and validation
+ * Retains backwards compatibility for previously encrypted project files.
  */
 export async function decryptProjectData(encryptedBase64: string): Promise<string> {
   try {
     // Validate input
     if (!encryptedBase64 || typeof encryptedBase64 !== 'string') {
-      throw new Error("Invalid encrypted data: empty or not a string");
+      throw new Error("Invalid project data: empty or not a string");
+    }
+
+    const trimmed = encryptedBase64.trim();
+
+    // If it starts with '{' it is already raw JSON, return as-is
+    if (trimmed.startsWith('{')) {
+      return trimmed;
+    }
+
+    // Check if it looks like a Base64 string before attempting atob
+    const isBase64 = /^[a-zA-Z0-9+/]*={0,2}$/.test(trimmed);
+    if (!isBase64) {
+      return trimmed;
     }
 
     // Decode Base64 - handle large files safely
-    const binary = atob(encryptedBase64);
-    const bytes = new Uint8Array(binary.length);
+    const binary = atob(trimmed);
     
-    // Process in smaller chunks for better stability
+    // If it doesn't start with the magic header, it's not encrypted, return as-is
+    if (!binary.startsWith(MAGIC_HEADER)) {
+      return trimmed;
+    }
+
+    const bytes = new Uint8Array(binary.length);
     const chunkSize = 8192; // 8KB chunks
     for (let i = 0; i < binary.length; i += chunkSize) {
       const end = Math.min(i + chunkSize, binary.length);
@@ -101,28 +81,15 @@ export async function decryptProjectData(encryptedBase64: string): Promise<strin
     const decoder = new TextDecoder();
     const headerBytes = encoder.encode(MAGIC_HEADER);
 
-    // Verify file is large enough to contain header + IV + data
-    const minSize = headerBytes.length + 12 + 16; // header + IV + minimum ciphertext
-    if (bytes.length < minSize) {
-      throw new Error("Invalid file format: file too small or corrupted");
-    }
-
-    // Verify magic header
-    for (let i = 0; i < headerBytes.length; i++) {
-      if (bytes[i] !== headerBytes[i]) {
-        throw new Error("Invalid file format: Missing magic header. This file may be corrupted.");
-      }
-    }
-
     const iv = bytes.slice(headerBytes.length, headerBytes.length + 12);
     const ciphertext = bytes.slice(headerBytes.length + 12);
     
     // Validate IV and ciphertext
     if (iv.length !== 12) {
-      throw new Error("Invalid file format: corrupted IV");
+      throw new Error("Corrupted IV");
     }
     if (ciphertext.length === 0) {
-      throw new Error("Invalid file format: no encrypted data");
+      throw new Error("No encrypted data");
     }
 
     const key = await getEncryptionKey();
@@ -142,10 +109,11 @@ export async function decryptProjectData(encryptedBase64: string): Promise<strin
 
     return result;
   } catch (err) {
-    console.error("Decryption failed:", err);
-    if (err instanceof Error) {
-      throw new Error(`Failed to decrypt the file: ${err.message}. The file might be corrupted or created with a different version.`);
+    console.error("Project load failed:", err);
+    // Fallback: if decryption failed but the original input is JSON, return it
+    if (encryptedBase64 && encryptedBase64.trim().startsWith('{')) {
+      return encryptedBase64;
     }
-    throw new Error("Failed to decrypt the file. It might be corrupted or created with a different version.");
+    throw new Error("Failed to load project: file is corrupted or in an invalid format.");
   }
 }

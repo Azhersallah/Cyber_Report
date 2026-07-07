@@ -10,7 +10,7 @@ import {
   Paintbrush, Minus, Droplet, RotateCw,
   Scan, Maximize2, Monitor, Smartphone, Layout,
   Move, StretchHorizontal, StretchVertical,
-  ArrowLeftRight, Eraser, Loader2, Sparkles,
+  ArrowLeftRight, Eraser, Loader2,
   Lock, Unlock, Waves, ImagePlus, PenTool, Palette, Eye,
   ZoomIn, ZoomOut
 } from 'lucide-react';
@@ -51,44 +51,6 @@ const ScrollSlider: React.FC<{
   );
 };
 
-// Lazy load face-api to avoid TextEncoder issues
-let faceapi: typeof import('face-api.js') | null = null;
-const loadFaceApi = async () => {
-  if (faceapi) return faceapi;
-  try {
-    // Temporarily hide Node.js globals to force face-api to use browser APIs
-    const originalProcess = (window as any).process;
-    const originalRequire = (window as any).require;
-    const originalModule = (window as any).module;
-    
-    delete (window as any).process;
-    delete (window as any).require;
-    delete (window as any).module;
-    
-    faceapi = await import('face-api.js');
-    
-    // Restore Node.js globals
-    if (originalProcess) (window as any).process = originalProcess;
-    if (originalRequire) (window as any).require = originalRequire;
-    if (originalModule) (window as any).module = originalModule;
-    
-    // Configure face-api to use browser environment
-    const browserEnv = {
-      Canvas: HTMLCanvasElement,
-      Image: HTMLImageElement,
-      ImageData: ImageData,
-      Video: HTMLVideoElement,
-      createCanvasElement: () => document.createElement('canvas'),
-      createImageElement: () => document.createElement('img'),
-    };
-    faceapi.env.monkeyPatch(browserEnv);
-    
-    return faceapi;
-  } catch (err) {
-    console.error('Failed to load face-api:', err);
-    return null;
-  }
-};
 
 interface ImageEditorProps {
   photo: Photo;
@@ -276,10 +238,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ photo, onClose, onSave }) => 
   const [toolMode, setToolMode] = useState<ToolMode>('select');
   const [activeTab, setActiveTab] = useState<'props' | 'layers'>('layers');
   const [isSaving, setIsSaving] = useState(false);
-  const [isRemovingBg, setIsRemovingBg] = useState(false);
-  const [bgRemovalProgress, setBgRemovalProgress] = useState(0);
-  const [bgRemovalStatus, setBgRemovalStatus] = useState<'downloading' | 'processing' | 'idle'>('idle');
-  const bgRemovalAbortRef = useRef<AbortController | null>(null);
+
   
   // Image layer state
   const [imageLayerLocked, setImageLayerLocked] = useState(false);
@@ -422,10 +381,6 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ photo, onClose, onSave }) => 
     initialData: any 
   }>({ type: 'idle', startX: 0, startY: 0, initialData: {} });
 
-  // Face retouching states
-  const [isRetouching, setIsRetouching] = useState(false);
-  const [faceModelsLoaded, setFaceModelsLoaded] = useState(false);
-  
   // Liquify tool state
   const [liquifyMode, setLiquifyMode] = useState<LiquifyMode>('push');
   const [liquifyBrushSize, setLiquifyBrushSize] = useState(50);
@@ -548,143 +503,6 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ photo, onClose, onSave }) => 
     input.click();
   };
 
-  const handleRemoveBackground = async () => {
-    if (isRemovingBg) return;
-    setIsRemovingBg(true);
-    setBgRemovalProgress(0);
-    
-    // Create abort controller for cancellation
-    bgRemovalAbortRef.current = new AbortController();
-    
-    // Start with processing status (assume models are cached)
-    // Will switch to downloading if progress callback indicates download
-    setBgRemovalStatus('processing');
-    
-    // Track if we've seen any download progress
-    let hasDownloadStarted = false;
-    
-    // Start fake progress animation for processing phase
-    let fakeProgress = 0;
-    let progressInterval: ReturnType<typeof setInterval> | null = null;
-    
-    // Start processing animation immediately
-    progressInterval = setInterval(() => {
-      if (!hasDownloadStarted) {
-        fakeProgress += Math.random() * 10;
-        if (fakeProgress > 90) fakeProgress = 90;
-        setBgRemovalProgress(Math.round(fakeProgress));
-      }
-    }, 400);
-    
-    // Store Node.js globals before try block so they're accessible in catch
-    const originalProcess = (window as any).process;
-    const originalRequire = (window as any).require;
-    const originalModule = (window as any).module;
-    
-    try {
-      // Hide Node.js detection to force ONNX to use browser WASM backend
-      delete (window as any).process;
-      delete (window as any).require;
-      delete (window as any).module;
-      
-      // Dynamically import background removal library
-      const bgRemovalModule = await import('@imgly/background-removal');
-      
-      const blob = await bgRemovalModule.removeBackground(currentSrc, {
-        output: {
-          format: 'image/png',
-          quality: 1,
-        },
-        progress: (key: string, current: number, total: number) => {
-          if (key.includes('fetch') || key.includes('download')) {
-            // Only switch to download status if actually downloading (total > 0 means real download)
-            if (total > 0 && current < total) {
-              hasDownloadStarted = true;
-              setBgRemovalStatus('downloading');
-              const progress = Math.round((current / total) * 100);
-              setBgRemovalProgress(progress);
-            }
-          } else if (key.includes('compute') || key.includes('inference')) {
-            // Switch back to processing after download completes
-            if (hasDownloadStarted) {
-              hasDownloadStarted = false;
-              setBgRemovalStatus('processing');
-              fakeProgress = 0;
-            }
-          }
-        }
-      });
-      
-      if (progressInterval) clearInterval(progressInterval);
-      setBgRemovalProgress(100);
-      
-      // Restore Node.js globals
-      if (originalProcess) (window as any).process = originalProcess;
-      if (originalRequire) (window as any).require = originalRequire;
-      if (originalModule) (window as any).module = originalModule;
-      
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCurrentSrc(reader.result as string);
-        setIsRemovingBg(false);
-        setBgRemovalProgress(0);
-        setBgRemovalStatus('idle');
-      };
-      reader.readAsDataURL(blob);
-    } catch (error) {
-      // Restore Node.js globals on error too
-      if (originalProcess) (window as any).process = originalProcess;
-      if (originalRequire) (window as any).require = originalRequire;
-      if (originalModule) (window as any).module = originalModule;
-      
-      if (progressInterval) clearInterval(progressInterval);
-      console.error('Background removal failed:', error);
-      setIsRemovingBg(false);
-      setBgRemovalProgress(0);
-      setBgRemovalStatus('idle');
-    }
-  };
-
-  const cancelBgRemoval = () => {
-    if (bgRemovalAbortRef.current) {
-      bgRemovalAbortRef.current.abort();
-    }
-    setIsRemovingBg(false);
-    setBgRemovalProgress(0);
-    setBgRemovalStatus('idle');
-  };
-
-  // Load face-api models
-  const loadFaceModels = async () => {
-    if (faceModelsLoaded) return true;
-    try {
-      const api = await loadFaceApi();
-      if (!api) {
-        console.error('Failed to load face-api module');
-        return false;
-      }
-      
-      // Check if running in Electron packaged app
-      const isElectron = window.navigator.userAgent.includes('Electron');
-      const isPackaged = isElectron && !window.location.href.includes('localhost');
-      
-      let MODEL_URL = '/models';
-      if (isPackaged) {
-        // In packaged Electron app, models are in the dist folder
-        MODEL_URL = './models';
-      }
-      
-      await Promise.all([
-        api.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-        api.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
-      ]);
-      setFaceModelsLoaded(true);
-      return true;
-    } catch (error) {
-      console.error('Failed to load face models:', error);
-      return false;
-    }
-  };
 
   // Store scale factor for liquify coordinate conversion
   const liquifyScaleRef = useRef<number>(1);
@@ -987,165 +805,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ photo, onClose, onSave }) => 
     };
   };
 
-  // Face retouching - skin smoothing
-  const handleFaceRetouch = async () => {
-    if (isRetouching) return;
-    setIsRetouching(true);
-    
-    try {
-      // Load models if not loaded
-      const modelsLoaded = await loadFaceModels();
-      if (!modelsLoaded) {
-        alert('Failed to load face detection models');
-        setIsRetouching(false);
-        return;
-      }
 
-      // Create image element
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = currentSrc;
-      
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
-      });
-
-      // Detect face with SSD MobileNet (more accurate)
-      const api = await loadFaceApi();
-      if (!api) {
-        alert('Failed to load face detection');
-        setIsRetouching(false);
-        return;
-      }
-      const detection = await api.detectSingleFace(img, new api.SsdMobilenetv1Options({ minConfidence: 0.3 }))
-        .withFaceLandmarks();
-
-      if (!detection) {
-        alert(t('faceRetouch.noFace'));
-        setIsRetouching(false);
-        return;
-      }
-
-      // Create canvas for processing
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        setIsRetouching(false);
-        return;
-      }
-
-      // Draw original image
-      ctx.drawImage(img, 0, 0);
-
-      // Get face bounding box
-      const box = detection.detection.box;
-      
-      // Apply skin smoothing using canvas blur (much faster)
-      const smoothedCanvas = applySkinSmoothing(canvas, ctx, box, img.width, img.height);
-      
-      setCurrentSrc(smoothedCanvas.toDataURL('image/png'));
-      setIsRetouching(false);
-    } catch (error) {
-      console.error('Face retouch failed:', error);
-      setIsRetouching(false);
-    }
-  };
-
-  // Fast skin smoothing using canvas blur
-  const applySkinSmoothing = (
-    canvas: HTMLCanvasElement, 
-    ctx: CanvasRenderingContext2D, 
-    faceBox: { x: number, y: number, width: number, height: number },
-    imgWidth: number,
-    imgHeight: number
-  ): HTMLCanvasElement => {
-    // Create a temporary canvas for the blurred face
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = imgWidth;
-    tempCanvas.height = imgHeight;
-    const tempCtx = tempCanvas.getContext('2d');
-    if (!tempCtx) return canvas;
-
-    // Copy original image
-    tempCtx.drawImage(canvas, 0, 0);
-    
-    // Apply blur to temp canvas
-    tempCtx.filter = 'blur(3px)';
-    tempCtx.drawImage(canvas, 0, 0);
-    tempCtx.filter = 'none';
-
-    // Get face region with padding
-    const padding = 30;
-    const x = Math.max(0, faceBox.x - padding);
-    const y = Math.max(0, faceBox.y - padding);
-    const w = Math.min(imgWidth - x, faceBox.width + padding * 2);
-    const h = Math.min(imgHeight - y, faceBox.height + padding * 2);
-
-    // Create mask for face region (ellipse)
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = imgWidth;
-    maskCanvas.height = imgHeight;
-    const maskCtx = maskCanvas.getContext('2d');
-    if (!maskCtx) return canvas;
-
-    // Draw ellipse mask for face
-    maskCtx.fillStyle = 'white';
-    maskCtx.beginPath();
-    maskCtx.ellipse(
-      x + w / 2, 
-      y + h / 2, 
-      w / 2 * 0.85, 
-      h / 2 * 0.9, 
-      0, 0, Math.PI * 2
-    );
-    maskCtx.fill();
-
-    // Apply feathered edge
-    maskCtx.filter = 'blur(15px)';
-    maskCtx.globalCompositeOperation = 'source-in';
-    maskCtx.fillRect(0, 0, imgWidth, imgHeight);
-    maskCtx.filter = 'none';
-
-    // Blend original with blurred using mask
-    const resultCanvas = document.createElement('canvas');
-    resultCanvas.width = imgWidth;
-    resultCanvas.height = imgHeight;
-    const resultCtx = resultCanvas.getContext('2d');
-    if (!resultCtx) return canvas;
-
-    // Draw original
-    resultCtx.drawImage(canvas, 0, 0);
-
-    // Draw blurred face with mask (50% opacity for subtle effect)
-    resultCtx.globalAlpha = 0.5;
-    resultCtx.globalCompositeOperation = 'source-over';
-    
-    // Use mask to only apply blur to face area
-    const blurredData = tempCtx.getImageData(0, 0, imgWidth, imgHeight);
-    const maskData = maskCtx.getImageData(0, 0, imgWidth, imgHeight);
-    const originalData = ctx.getImageData(0, 0, imgWidth, imgHeight);
-    
-    for (let i = 0; i < blurredData.data.length; i += 4) {
-      const maskAlpha = maskData.data[i] / 255 * 0.5; // 50% max blend
-      if (maskAlpha > 0) {
-        blurredData.data[i] = originalData.data[i] * (1 - maskAlpha) + blurredData.data[i] * maskAlpha;
-        blurredData.data[i + 1] = originalData.data[i + 1] * (1 - maskAlpha) + blurredData.data[i + 1] * maskAlpha;
-        blurredData.data[i + 2] = originalData.data[i + 2] * (1 - maskAlpha) + blurredData.data[i + 2] * maskAlpha;
-      } else {
-        blurredData.data[i] = originalData.data[i];
-        blurredData.data[i + 1] = originalData.data[i + 1];
-        blurredData.data[i + 2] = originalData.data[i + 2];
-      }
-      blurredData.data[i + 3] = originalData.data[i + 3];
-    }
-    
-    resultCtx.putImageData(blurredData, 0, 0);
-    
-    return resultCanvas;
-  };
 
   const updateAnnotation = (id: string, updates: Partial<Annotation>) => {
     setAnnotations(prev => prev.map(a => {
@@ -1784,9 +1444,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ photo, onClose, onSave }) => 
                  <ToolbarButton onClick={addBlur} icon={Droplet} tooltip={t('tool.blur')} disabled={toolMode === 'crop' || toolMode === 'perspective' || toolMode === 'transform'} isKurdish={state.language === 'ku'} />
                  <ToolbarButton onClick={addImage} icon={ImagePlus} tooltip={t('tool.addImage')} disabled={toolMode === 'crop' || toolMode === 'perspective' || toolMode === 'transform'} isKurdish={state.language === 'ku'} />
                  <ToolbarSeparator />
-                 <ToolbarButton onClick={handleRemoveBackground} icon={isRemovingBg ? Loader2 : Eraser} tooltip={t('tool.removeBg')} disabled={isRemovingBg || toolMode === 'crop' || toolMode === 'perspective' || toolMode === 'transform' || toolMode === 'liquify' || toolMode === 'eraser'} isKurdish={state.language === 'ku'} />
                  <ToolbarButton active={toolMode === 'eraser'} onClick={() => { setToolMode(toolMode === 'eraser' ? 'select' : 'eraser'); setActiveTab('props'); }} icon={PenTool} tooltip={t('tool.manualEraser')} disabled={toolMode === 'crop' || toolMode === 'perspective' || toolMode === 'transform' || toolMode === 'liquify'} isKurdish={state.language === 'ku'} />
-                 <ToolbarButton onClick={handleFaceRetouch} icon={isRetouching ? Loader2 : Sparkles} tooltip={t('tool.faceRetouch')} disabled={isRetouching || toolMode === 'crop' || toolMode === 'perspective' || toolMode === 'transform' || toolMode === 'liquify' || toolMode === 'eraser'} isKurdish={state.language === 'ku'} />
                  <ToolbarButton active={toolMode === 'liquify'} onClick={() => { setToolMode(toolMode === 'liquify' ? 'select' : 'liquify'); setActiveTab('props'); }} icon={Waves} tooltip={t('tool.liquify')} disabled={toolMode === 'crop' || toolMode === 'perspective' || toolMode === 'transform' || toolMode === 'eraser'} isKurdish={state.language === 'ku'} />
             </div>
 
@@ -2322,100 +1980,7 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ photo, onClose, onSave }) => 
     </div>
   );
 
-  // Background Removal Progress Dialog
-  const bgRemovalDialog = isRemovingBg && (
-    <div className={`fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in ${isKurdish ? 'font-kufi' : 'font-sans'}`} dir={isKurdish ? 'rtl' : 'ltr'}>
-      <div className="bg-card rounded-xl shadow-2xl p-6 w-80 border border-border">
-        <div className="flex flex-col items-center text-center">
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            {bgRemovalStatus === 'downloading' ? t('bgRemoval.downloading') : t('bgRemoval.processing')}
-          </h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            {bgRemovalStatus === 'downloading' 
-              ? t('bgRemoval.downloadingDesc')
-              : t('bgRemoval.processingDesc')
-            }
-          </p>
-          
-          {/* Progress bar - filling for download, animated for processing */}
-          <div className="w-full bg-muted rounded-full h-2.5 mb-2 overflow-hidden">
-            {bgRemovalStatus === 'downloading' ? (
-              <div 
-                className="h-full rounded-full bg-primary transition-all duration-300"
-                style={{ width: `${bgRemovalProgress}%` }}
-              />
-            ) : (
-              <div 
-                className="h-full rounded-full"
-                style={{ 
-                  background: 'linear-gradient(90deg, transparent, hsl(var(--primary)), transparent)',
-                  animation: 'progressSlide 1.5s ease-in-out infinite',
-                  width: '50%'
-                }}
-              />
-            )}
-          </div>
-          
-          {/* Show percentage only during download */}
-          {bgRemovalStatus === 'downloading' && (
-            <span className="text-xs text-muted-foreground font-mono mb-2">{bgRemovalProgress}%</span>
-          )}
-          
-          {/* Cancel button only shown during download phase */}
-          {bgRemovalStatus === 'downloading' && (
-            <button
-              onClick={cancelBgRemoval}
-              className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted hover:bg-accent rounded-lg transition-colors mt-2"
-            >
-              {t('action.cancel')}
-            </button>
-          )}
-        </div>
-      </div>
-      <style>{`
-        @keyframes progressSlide {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
-        }
-      `}</style>
-    </div>
-  );
-
-  // Face Retouch Progress Dialog
-  const faceRetouchDialog = isRetouching && (
-    <div className={`fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in ${isKurdish ? 'font-kufi' : 'font-sans'}`} dir={isKurdish ? 'rtl' : 'ltr'}>
-      <div className="bg-card rounded-xl shadow-2xl p-6 w-80 border border-border">
-        <div className="flex flex-col items-center text-center">
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            {t('faceRetouch.processing')}
-          </h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            {t('faceRetouch.processingDesc')}
-          </p>
-          
-          {/* Animated progress bar */}
-          <div className="w-full bg-muted rounded-full h-2.5 mb-4 overflow-hidden">
-            <div 
-              className="h-full rounded-full"
-              style={{ 
-                background: 'linear-gradient(90deg, transparent, hsl(var(--primary)), transparent)',
-                animation: 'progressSlide 1.5s ease-in-out infinite',
-                width: '50%'
-              }}
-            />
-          </div>
-        </div>
-      </div>
-      <style>{`
-        @keyframes progressSlide {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
-        }
-      `}</style>
-    </div>
-  );
-
-  return ReactDOM.createPortal(<>{modalContent}{bgRemovalDialog}{faceRetouchDialog}</>, document.body);
+  return ReactDOM.createPortal(<>{modalContent}</>, document.body);
 };
 
 export default ImageEditor;
