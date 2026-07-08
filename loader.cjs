@@ -1,5 +1,5 @@
 /**
- * Simple Loader for Photo Printer Free
+ * Simple Loader for Cyber Report
  * Directly loads and executes main.cjs (no encryption, no license checks).
  */
 

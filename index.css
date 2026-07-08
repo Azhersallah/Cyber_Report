@@ -290,3 +290,19 @@ mark.search-highlight-current {
   scrollbar-width: none;  /* Firefox */
 }
 
+
+/* Update Toast Animation */
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -100%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

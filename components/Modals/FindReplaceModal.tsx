@@ -202,7 +202,13 @@ const FindReplaceModal: React.FC<FindReplaceModalProps> = ({ isOpen, onClose }) 
 
 
   const panelContent = (
-    <div ref={panelRef} className={`fixed top-16 z-[9999] w-80 bg-popover rounded-lg shadow-xl border border-border overflow-hidden animate-fade-in ${isKurdish ? 'left-4 font-kufi' : 'right-4'}`} dir={isKurdish ? 'rtl' : 'ltr'}>
+    <div 
+      ref={panelRef} 
+      className={`fixed top-16 z-[9999] w-80 bg-popover rounded-lg shadow-xl border border-border overflow-hidden animate-fade-in ${isKurdish ? 'left-4 font-kufi' : 'right-4'}`} 
+      dir={isKurdish ? 'rtl' : 'ltr'}
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="px-3 py-2.5 border-b border-border flex items-center justify-between bg-muted/30">
         <div className="flex items-center gap-2">
           <Search size={14} className="text-muted-foreground" />

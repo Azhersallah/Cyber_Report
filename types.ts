@@ -95,6 +95,7 @@ export interface Photo {
   crop?: CropData;
   annotations: Annotation[];
   description?: string;
+  dateText?: string;
 }
 
 export interface AppSettings {

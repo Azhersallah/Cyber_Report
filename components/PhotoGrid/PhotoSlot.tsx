@@ -47,7 +47,7 @@ const InsertTrigger = ({ orientation, onClick }: { orientation: 'vertical' | 'ho
   return (
       <div 
           className={cn(
-              "absolute flex items-center justify-center opacity-0 hover:opacity-100 transition-all duration-200 cursor-pointer group/trigger no-print z-[100]",
+              "absolute flex items-center justify-center opacity-0 hover:opacity-100 transition-all duration-200 cursor-pointer group/trigger no-print z-[9999]",
               isVert ? "-top-6 left-0 right-0 h-8" : "-left-6 top-0 bottom-0 w-8"
           )}
           onClick={(e) => { e.stopPropagation(); onClick(); }}
@@ -58,7 +58,7 @@ const InsertTrigger = ({ orientation, onClick }: { orientation: 'vertical' | 'ho
               isVert ? "w-full h-px" : "h-full w-px"
           )}></div>
           
-          <div className="absolute bg-foreground text-background rounded-full p-1 shadow-sm transform scale-50 opacity-0 group-hover/trigger:opacity-100 group-hover/trigger:scale-100 transition-all duration-200">
+          <div className="absolute bg-foreground text-background rounded-full p-1 shadow-lg transform scale-50 opacity-0 group-hover/trigger:opacity-100 group-hover/trigger:scale-100 transition-all duration-200 z-[9999]">
               <Plus size={12} strokeWidth={3} />
           </div>
       </div>
@@ -149,28 +149,10 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
 
   // Handle rounding logic - use square borders if requested by parent
   const isRoundedNone = className.includes('rounded-none');
   const roundingClass = isRoundedNone ? 'rounded-none' : 'rounded-xl';
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    
-    const observer = new ResizeObserver((entries) => {
-        const entry = entries[0];
-        if (entry) {
-            setContainerDims({ 
-                width: entry.contentRect.width, 
-                height: entry.contentRect.height 
-            });
-        }
-    });
-
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const handleRotate = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -311,24 +293,48 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      // Allow both move (internal) and copy (external files)
+      // Allow all drag operations to show visual feedback
       if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
+          if (!isDragOver) setIsDragOver(true);
       } else {
+          // Internal drag (photo swap between slots)
+          e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
+          if (!isDragOver) setIsDragOver(true);
       }
-      if (!isDragOver) setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
-      setIsDragOver(false);
+      // Only clear isDragOver if we're actually leaving the slot (not just moving between children)
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const x = e.clientX;
+      const y = e.clientY;
+      
+      // Check if mouse is still inside the slot
+      if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+          setIsDragOver(false);
+      }
   };
 
   const handleDrop = async (e: React.DragEvent) => {
-      e.preventDefault();
+      // ALWAYS clear drag state immediately, regardless of file type
       setIsDragOver(false);
+
+      // If a project file (.pppro / .ppfree) is dropped on this slot, ignore it completely.
+      // The global window capture handler in App.tsx will handle it and show the load modal.
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          const firstName = e.dataTransfer.files[0].name.toLowerCase();
+          if (firstName.endsWith('.pppro') || firstName.endsWith('.ppfree') || firstName.endsWith('.cyr')) {
+              // Do NOT preventDefault - let it bubble to App.tsx global handler
+              // isDragOver already cleared above
+              return; // Let global handler deal with it; slot stays clean
+          }
+      }
       
+      // For non-project files, prevent default to handle the drop here
+      e.preventDefault();
       // Check if files are being dropped from outside the app
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
           const files = e.dataTransfer.files;
@@ -392,16 +398,27 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   const hasCrop = photo && !!photo.crop;
   const isRotated90 = photo && (photo.rotation % 180 !== 0);
 
-  const wrapperStyle = isRotated90 && containerDims.width > 0 ? {
-      width: `${containerDims.height}px`,
-      height: `${containerDims.width}px`
+  const wrapperStyle = isRotated90 ? {
+      width: '100cqh',
+      height: '100cqw',
+      minWidth: '100cqh',
+      minHeight: '100cqw',
+      maxWidth: 'none',
+      maxHeight: 'none',
+      flexShrink: 0
   } : {
       width: '100%',
-      height: '100%'
+      height: '100%',
+      minWidth: 'auto',
+      minHeight: 'auto',
+      maxWidth: '100%',
+      maxHeight: '100%',
+      flexShrink: 0
   };
 
   return (
     <div 
+      data-drop-target="slot"
       className={cn(
         "relative group bg-white border select-none transition-all duration-200 print:border-transparent print:ring-0 print:shadow-none",
         roundingClass,
@@ -427,7 +444,7 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,.heic,.heif" className="hidden" />
       <input type="file" ref={insertInputRef} onChange={handleInsertFileChange} accept="image/*,.heic,.heif" multiple className="hidden" />
 
-      <div ref={containerRef} className={`w-full h-full overflow-hidden relative ${roundingClass} z-0 flex items-center justify-center transition-opacity`}>
+      <div ref={containerRef} className={`w-full h-full overflow-hidden relative ${roundingClass} z-0 flex items-center justify-center transition-opacity`} style={{ containerType: 'size' }}>
           
           {photo && settings.showPhotoBadges && !overlayNumber && !hideBadge && badgeColor && (
             <div 

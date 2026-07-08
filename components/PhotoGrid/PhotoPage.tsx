@@ -1199,13 +1199,14 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
   return (
     <div 
       id={`page-container-${pageIndex}`}
-      className={`flex flex-col h-full w-full relative group overflow-hidden ${getPaddingClass()} bg-white`} 
+      className={`flex flex-col h-full w-full relative group ${getPaddingClass()} bg-white print:overflow-hidden`} 
       style={{ 
         fontFamily: settings.defaultFontFamily || 'Inter',
         paddingTop: `${4 + (settings.marginTop ?? 0)}mm`,
         paddingRight: `${3 + (settings.marginRight ?? 0)}mm`,
         paddingBottom: `${3 + (settings.marginBottom ?? 0)}mm`,
-        paddingLeft: `${3 + (settings.marginLeft ?? 0)}mm`
+        paddingLeft: `${3 + (settings.marginLeft ?? 0)}mm`,
+        overflow: 'visible'
       }} 
       dir="ltr"
       onClick={() => { dispatch({ type: 'SELECT_PAGE', payload: pageIndex }); }}

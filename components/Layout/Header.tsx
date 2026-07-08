@@ -22,6 +22,7 @@ import UpdateModal from '../Modals/UpdateModal';
 // Check if running in Electron
 const isElectron = typeof window !== 'undefined' && (window as any).require;
 const ipcRenderer = isElectron ? (window as any).require('electron').ipcRenderer : null;
+// Force reload favicon - remove timestamp after testing
 const faviconUrl = new URL('../../favicon.svg', import.meta.url).href;
 
 interface HeaderProps {
@@ -100,7 +101,7 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
   // Update Modal state
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
-
+  const [updateToastData, setUpdateToastData] = useState<{ version: string } | null>(null);
 
   // Save lock to prevent concurrent saves (fixes corruption)
   const isSavingRef = useRef(false);
@@ -116,6 +117,27 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
     return () => {
       window.removeEventListener('open-update-modal', handleOpenUpdateModal);
     };
+  }, []);
+
+  // Listen for update available toast notification from main process
+  useEffect(() => {
+    if (isElectron && ipcRenderer) {
+      console.log('[Header] Setting up update toast listener...');
+      
+      const handleUpdateToast = (_event: any, data: { version: string; message: string; messageEn: string }) => {
+        console.log('[Header] Received update toast:', data);
+        setUpdateToastData({ version: data.version });
+        setUpdateAvailable(true);
+      };
+
+      ipcRenderer.on('update-available-toast', handleUpdateToast);
+      
+      return () => {
+        ipcRenderer.removeListener('update-available-toast', handleUpdateToast);
+      };
+    } else {
+      console.log('[Header] Not in Electron or ipcRenderer not available');
+    }
   }, []);
 
   // Keyboard shortcut: Ctrl+F for Find & Replace (only in Photos mode)
@@ -158,25 +180,9 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
     action();
   };
 
-  // Check for updates on startup (background)
+  // Listen for update status changes from main process
   useEffect(() => {
     if (isElectron && ipcRenderer) {
-      // Check for updates silently on startup
-      const checkUpdatesOnStartup = async () => {
-        try {
-          const result = await ipcRenderer.invoke('check-for-updates');
-          if (result.success && result.updateAvailable) {
-            setUpdateAvailable(true);
-          }
-        } catch (err) {
-          console.log('Background update check failed:', err);
-        }
-      };
-      
-      // Delay check by 3 seconds to let app load first
-      const timer = setTimeout(checkUpdatesOnStartup, 3000);
-      
-      // Listen for update status changes
       const handleUpdateStatus = (_event: any, data: any) => {
         if (data.status === 'available') {
           setUpdateAvailable(true);
@@ -188,33 +194,18 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
       ipcRenderer.on('update-status', handleUpdateStatus);
       
       return () => {
-        clearTimeout(timer);
         ipcRenderer.removeListener('update-status', handleUpdateStatus);
       };
     }
   }, []);
 
-  // Sync current file path and check for pending file on mount
+  // Sync current file path on mount
+  // NOTE: Pending file opening is now handled in App.tsx with confirmation dialog
   useEffect(() => {
     if (isElectron && ipcRenderer) {
       const initializeFromFile = async () => {
         try {
-          // First check if there's a pending file to open (from double-click startup)
-          const pendingResult = await ipcRenderer.invoke('get-pending-file');
-          if (pendingResult.success && pendingResult.content && pendingResult.filePath) {
-            // Decrypt and load the project
-            const decryptedJson = await decryptProjectData(pendingResult.content);
-            const parsed = JSON.parse(decryptedJson);
-            if (parsed && typeof parsed === 'object') {
-              dispatch({ type: 'LOAD_PROJECT', payload: parsed });
-              setCurrentFilePath(pendingResult.filePath);
-              ipcRenderer.invoke('set-current-project-path', pendingResult.filePath);
-              showToast(t('toast.projectOpened'), 'success');
-              return; // Don't need to sync path, we just set it
-            }
-          }
-          
-          // If no pending file, just sync the current path
+          // Just sync the current path, don't load pending files (handled by App.tsx)
           const savedPath = await ipcRenderer.invoke('get-current-project-path');
           if (savedPath) {
             setCurrentFilePath(savedPath);
@@ -225,56 +216,45 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
       };
       initializeFromFile();
     }
-  }, [dispatch, showToast, t]);
+    
+    // Listen for file path changes from App.tsx (when project is loaded via drag/drop or double-click)
+    const handleFilePathChanged = (e: CustomEvent) => {
+      const filePath = e.detail;
+      console.log('[Header] Received project-file-path-changed event:', filePath);
+      if (filePath) {
+        setCurrentFilePath(filePath);
+        console.log('[Header] currentFilePath updated to:', filePath);
+      }
+    };
+    
+    window.addEventListener('project-file-path-changed', handleFilePathChanged as EventListener);
+    
+    return () => {
+      window.removeEventListener('project-file-path-changed', handleFilePathChanged as EventListener);
+    };
+  }, []);
 
   // Get file name from path
   const getFileName = (filePath: string | null): string => {
     if (!filePath) return t('app.untitled');
     const parts = filePath.replace(/\\/g, '/').split('/');
-    return parts[parts.length - 1].replace('.pppro', '');
+    return parts[parts.length - 1].replace(/\.(pppro|ppfree|cyr)$/i, '');
   };
 
   // Update window title based on current file
   useEffect(() => {
     const fileName = getFileName(currentFilePath);
-    document.title = `Photo Printer Pro - ${fileName}`;
+    document.title = `Cyber Report - ${fileName}`;
     
     // Also update Electron window title
     if (isElectron && ipcRenderer) {
-      ipcRenderer.invoke('set-window-title', `Photo Printer Pro - ${fileName}`);
+      ipcRenderer.invoke('set-window-title', `Cyber Report - ${fileName}`);
     }
   }, [currentFilePath, state.language]);
 
   // Listen for file opened from Electron (double-click on .pppro file)
-  useEffect(() => {
-    if (isElectron && ipcRenderer) {
-      const handleProjectOpened = async (
-        _event: any,
-        data: { content: string; filePath: string }
-      ) => {
-        try {
-          // Decrypt and load the project data
-          const decryptedJson = await decryptProjectData(data.content);
-          const parsed = JSON.parse(decryptedJson);
-          if (parsed && typeof parsed === 'object') {
-            dispatch({ type: 'LOAD_PROJECT', payload: parsed });
-            setCurrentFilePath(data.filePath);
-            ipcRenderer.invoke('set-current-project-path', data.filePath);
-            showToast(t('toast.projectOpened'), 'success');
-          }
-        } catch (err) {
-          console.error('Failed to open project:', err);
-          showToast(t('toast.openFailed'), 'error');
-        }
-      };
-
-      ipcRenderer.on('open-project-encrypted', handleProjectOpened);
-
-      return () => {
-        ipcRenderer.removeListener('open-project-encrypted', handleProjectOpened);
-      };
-    }
-  }, [dispatch, showToast, t]);
+  // NOTE: This is now handled in App.tsx with confirmation dialog
+  // useEffect removed to prevent duplicate dialogs
 
   // Close settings when clicking outside
   useEffect(() => {
@@ -329,19 +309,19 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
   const getModeDescription = (modeId: AppMode, lang: 'en' | 'ku' | 'ar') => {
     const descriptions: Record<string, Record<'en' | 'ku' | 'ar', string>> = {
       photos: {
-        en: 'Arrange and print multiple photos and reports',
-        ku: 'ڕێکخستن و چاپکردنی فرەوێنە و ڕاپۆرت',
-        ar: 'ترتيب وطباعة الصور المتعددة والتقارير'
+        en: 'Arrange and organize photos and report documents',
+        ku: 'ڕێکخستن و ڕێکخستنەوەی وێنەکان و بەڵگەنامەکانی ڕاپۆرت',
+        ar: 'ترتيب وتنظيم الصور ومستندات التقارير'
       },
       businesscard: {
-        en: 'Design and print professional business cards',
-        ku: 'دیزاین و چاپکردنی کارتی بازرگانی پیشەیی',
-        ar: 'تصميم وطباعة بطاقات العمل المهنية'
+        en: 'Design professional business cards',
+        ku: 'دیزاینکردنی کارتی بازرگانی پیشەیی',
+        ar: 'تصميم بطاقات العمل المهنية'
       },
       invoice: {
-        en: 'Create and print sales invoices',
-        ku: 'دروستکردن و چاپکردنی پسوڵەی فرۆشتن',
-        ar: 'إنشاء وطباعة فواتير المبيعات'
+        en: 'Create sales invoices',
+        ku: 'دروستکردنی پسوڵەی فرۆشتن',
+        ar: 'إنشاء فواتير المبيعات'
       },
       idphoto: {
         en: 'Prepare photos for passports and ID cards',
@@ -374,9 +354,9 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
         ar: 'تنظيم المهام اليومية والملاحظات الشخصية'
       },
       envelope: {
-        en: 'Design and print mailing envelopes (Coming Soon)',
-        ku: 'دیزاین و چاپکردنی زەرفی نامە (بەمنزیکانە)',
-        ar: 'تصميم وطباعة أظرف الرسائل (قريباً)'
+        en: 'Design mailing envelopes (Coming Soon)',
+        ku: 'دیزاینی زەرفی نامە (بەمنزیکانە)',
+        ar: 'تصميم أظرف الرسائل (قريباً)'
       }
     };
     return descriptions[modeId]?.[lang] || '';
@@ -448,11 +428,11 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
                 const { exportPhotosToWord } = await import('../../utils/exportToWord');
                 const wordBlob = await exportPhotosToWord(state);
                 
-                // Get the directory and base name from the saved .pppro file
+                // Get the directory and base name from the saved file
                 const ppproPath = result.filePath;
                 const lastSlash = Math.max(ppproPath.lastIndexOf('/'), ppproPath.lastIndexOf('\\'));
                 const directory = ppproPath.substring(0, lastSlash);
-                const fileName = ppproPath.substring(lastSlash + 1).replace('.pppro', '');
+                const fileName = ppproPath.substring(lastSlash + 1).replace(/\.(pppro|ppfree|cyr)$/i, '');
                 const wordPath = `${directory}\\${fileName}.docx`;
                 
                 // Convert blob to buffer and save
@@ -462,10 +442,12 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
                 const fs = (window as any).require('fs');
                 fs.writeFileSync(wordPath, buffer);
                 
+                const dotIndex = ppproPath.lastIndexOf('.');
+                const ext = dotIndex !== -1 ? ppproPath.substring(dotIndex) : '.cyr';
                 showToast(
                   state.language === 'ku' 
-                    ? 'هەردوو فایلەکە سەیڤ کران (.pppro و .docx)'
-                    : 'Both files saved (.pppro and .docx)',
+                    ? `هەردوو فایلەکە سەیڤ کران (${ext} و .docx)`
+                    : `Both files saved (${ext} and .docx)`,
                   'success'
                 );
               } catch (wordErr) {
@@ -507,86 +489,88 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
           const encryptedContent = await encryptProjectData(projectJson);
           
           if (isElectron && ipcRenderer) {
-            // Electron: use native save dialog
-            const date = new Date().toISOString().split('T')[0];
-            const result = await ipcRenderer.invoke('save-project-as', { 
-              content: encryptedContent, 
-              defaultName: `project-${date}.pppro` 
-            });
-            if (result.success) {
-              setCurrentFilePath(result.filePath);
-              showToast(t('toast.saved'), 'success');
-              
-              // If autoExportWord is enabled, in Photos mode, and has photos, also export to Word
-              if (state.settings.autoExportWord && state.mode === 'photos' && state.photos.length > 0) {
-                try {
-                  const { exportPhotosToWord } = await import('../../utils/exportToWord');
-                  const wordBlob = await exportPhotosToWord(state);
-                  
-                  // Get the directory and base name from the saved .pppro file
-                  const ppproPath = result.filePath;
-                  const lastSlash = Math.max(ppproPath.lastIndexOf('/'), ppproPath.lastIndexOf('\\'));
-                  const directory = ppproPath.substring(0, lastSlash);
-                  const fileName = ppproPath.substring(lastSlash + 1).replace('.pppro', '');
-                  const wordPath = `${directory}\\${fileName}.docx`;
-                  
-                  // Convert blob to buffer and save
-                  const arrayBuffer = await wordBlob.arrayBuffer();
-                  const buffer = Buffer.from(arrayBuffer);
-                  
-                  const fs = (window as any).require('fs');
-                  fs.writeFileSync(wordPath, buffer);
-                  
-                  showToast(
-                    state.language === 'ku' 
-                      ? 'هەردوو فایلەکە سەیڤ کران (.pppro و .docx)'
-                      : 'Both files saved (.pppro and .docx)',
-                    'success'
-                  );
-                } catch (wordErr) {
-                  console.error('Word export failed:', wordErr);
-                  // Don't show error, the main .pppro file was saved successfully
-                }
-              }
-            } else if (!result.canceled) {
-              showToast(t('toast.saveFailed'), 'error');
-            }
+             // Electron: use native save dialog
+             const date = new Date().toISOString().split('T')[0];
+             const result = await ipcRenderer.invoke('save-project-as', { 
+               content: encryptedContent, 
+               defaultName: `project-${date}.cyr` 
+             });
+             if (result.success) {
+               setCurrentFilePath(result.filePath);
+               showToast(t('toast.saved'), 'success');
+               
+               // If autoExportWord is enabled, in Photos mode, and has photos, also export to Word
+               if (state.settings.autoExportWord && state.mode === 'photos' && state.photos.length > 0) {
+                 try {
+                   const { exportPhotosToWord } = await import('../../utils/exportToWord');
+                   const wordBlob = await exportPhotosToWord(state);
+                   
+                   // Get the directory and base name from the saved file
+                   const ppproPath = result.filePath;
+                   const lastSlash = Math.max(ppproPath.lastIndexOf('/'), ppproPath.lastIndexOf('\\'));
+                   const directory = ppproPath.substring(0, lastSlash);
+                   const fileName = ppproPath.substring(lastSlash + 1).replace(/\.(pppro|ppfree|cyr)$/i, '');
+                   const wordPath = `${directory}\\${fileName}.docx`;
+                   
+                   // Convert blob to buffer and save
+                   const arrayBuffer = await wordBlob.arrayBuffer();
+                   const buffer = Buffer.from(arrayBuffer);
+                   
+                   const fs = (window as any).require('fs');
+                   fs.writeFileSync(wordPath, buffer);
+                   
+                   const dotIndex = ppproPath.lastIndexOf('.');
+                   const ext = dotIndex !== -1 ? ppproPath.substring(dotIndex) : '.cyr';
+                   showToast(
+                     state.language === 'ku' 
+                       ? `هەردوو فایلەکە سەیڤ کران (${ext} و .docx)`
+                       : `Both files saved (${ext} and .docx)`,
+                     'success'
+                   );
+                 } catch (wordErr) {
+                   console.error('Word export failed:', wordErr);
+                   // Don't show error, the main file was saved successfully
+                 }
+               }
+             } else if (!result.canceled) {
+               showToast(t('toast.saveFailed'), 'error');
+             }
           } else {
             // Browser: download file
-            const blob = new Blob([encryptedContent], { type: 'application/octet-stream' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            const date = new Date().toISOString().split('T')[0];
-            link.href = url;
-            link.download = `project-${date}.pppro`;
-            link.click();
-            URL.revokeObjectURL(url);
-            
-            // If autoExportWord is enabled, in Photos mode, and has photos, also export to Word
-            if (state.settings.autoExportWord && state.mode === 'photos' && state.photos.length > 0) {
-              try {
-                const { exportPhotosToWord } = await import('../../utils/exportToWord');
-                const wordBlob = await exportPhotosToWord(state);
-                const wordUrl = URL.createObjectURL(wordBlob);
-                const wordLink = document.createElement('a');
-                wordLink.href = wordUrl;
-                wordLink.download = `project-${date}.docx`;
-                wordLink.click();
-                URL.revokeObjectURL(wordUrl);
-                
-                showToast(
-                  state.language === 'ku' 
-                    ? 'هەردوو فایلەکە دابەزێنران (.pppro و .docx)'
-                    : 'Both files downloaded (.pppro and .docx)',
-                  'success'
-                );
-              } catch (wordErr) {
-                console.error('Word export failed:', wordErr);
-                showToast(t('toast.saved'), 'success');
-              }
-            } else {
-              showToast(t('toast.saved'), 'success');
-            }
+             const blob = new Blob([encryptedContent], { type: 'application/octet-stream' });
+             const url = URL.createObjectURL(blob);
+             const link = document.createElement('a');
+             const date = new Date().toISOString().split('T')[0];
+             link.href = url;
+             link.download = `project-${date}.cyr`;
+             link.click();
+             URL.revokeObjectURL(url);
+             
+             // If autoExportWord is enabled, in Photos mode, and has photos, also export to Word
+             if (state.settings.autoExportWord && state.mode === 'photos' && state.photos.length > 0) {
+               try {
+                 const { exportPhotosToWord } = await import('../../utils/exportToWord');
+                 const wordBlob = await exportPhotosToWord(state);
+                 const wordUrl = URL.createObjectURL(wordBlob);
+                 const wordLink = document.createElement('a');
+                 wordLink.href = wordUrl;
+                 wordLink.download = `project-${date}.docx`;
+                 wordLink.click();
+                 URL.revokeObjectURL(wordUrl);
+                 
+                 showToast(
+                   state.language === 'ku' 
+                     ? 'هەردوو فایلەکە دابەزێنران (.ppfree و .docx)'
+                     : 'Both files downloaded (.ppfree and .docx)',
+                   'success'
+                 );
+               } catch (wordErr) {
+                 console.error('Word export failed:', wordErr);
+                 showToast(t('toast.saved'), 'success');
+               }
+             } else {
+               showToast(t('toast.saved'), 'success');
+             }
           }
       } catch (err) {
           showToast(t('toast.saveFailed'), 'error');
@@ -721,7 +705,15 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
     switch (state.mode) {
       case 'photos': {
         const count = state.photos.filter(Boolean).length;
-        return isKu ? `${count} وێنە` : isAr ? `${count} صورة` : `${count} Photo${count !== 1 ? 's' : ''}`;
+        const pages = state.manualPageCount;
+        if (isKu) {
+          return `${count} وێنە   |   ${pages} پەڕە`;
+        } else if (isAr) {
+          const pageWord = pages === 1 ? 'صفحة' : pages === 2 ? 'صفحتان' : pages <= 10 ? 'صفحات' : 'صفحة';
+          return `${count} صورة   |   ${pages} ${pageWord}`;
+        } else {
+          return `${count} Photo${count !== 1 ? 's' : ''}   |   ${pages} Page${pages !== 1 ? 's' : ''}`;
+        }
       }
       case 'idphoto': {
         const count = state.idPhotos.filter(Boolean).length;
@@ -729,7 +721,15 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
       }
       case 'invoice': {
         const count = state.invoicePhotos.filter(Boolean).length;
-        return isKu ? `${count} پسوڵە` : isAr ? `${count} فاتورة` : `${count} Invoice${count !== 1 ? 's' : ''}`;
+        const pages = Math.ceil(Math.max(0, ((state.settings.invoiceEndNumber ?? 100) - (state.settings.invoiceStartNumber ?? 1) + 1)) / 2);
+        if (isKu) {
+          return `${count} پسوڵە   |   ${pages} پەڕە`;
+        } else if (isAr) {
+          const pageWord = pages === 1 ? 'صفحة' : pages === 2 ? 'صفحتان' : pages <= 10 ? 'صفحات' : 'صفحة';
+          return `${count} فاتورة   |   ${pages} ${pageWord}`;
+        } else {
+          return `${count} Invoice${count !== 1 ? 's' : ''}   |   ${pages} Page${pages !== 1 ? 's' : ''}`;
+        }
       }
       case 'businesscard':
         return isKu ? 'کارت' : isAr ? 'بطاقة' : 'Card';
@@ -751,8 +751,8 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
       
       {/* Logo + Mode Switcher */}
       <div className="flex items-center gap-3 h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 bg-accent/40 border border-border/50 shadow-sm transition-all hover:scale-105 duration-200">
-          <img src={faviconUrl} alt="Logo" className="w-full h-full p-1" />
+        <div className="w-9 h-9 flex items-center justify-center overflow-hidden flex-shrink-0 transition-all hover:scale-105 duration-200">
+          <img src={faviconUrl} alt="Logo" className="w-full h-full object-contain" />
         </div>
         
         <div className="w-px h-5 bg-border/80 mx-1" />
@@ -828,17 +828,71 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
       </div>
 
       {/* Center: Current Project Hub */}
-      <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-zinc-100/50 dark:bg-zinc-800/50 border border-border/60 rounded-full text-[11px] max-w-sm select-none" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <FileText size={13} className="text-zinc-500 dark:text-zinc-400 shrink-0" />
-        <span className="font-bold text-foreground/90 truncate max-w-[120px]" title={currentFilePath || undefined}>
-          {getFileName(currentFilePath)}
-        </span>
-        <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-        <span className="text-muted-foreground font-medium shrink-0 flex items-center gap-1">
-          {React.createElement(getModeIcon(state.mode), { size: 12, className: "text-zinc-500" })}
-          {getModeContextInfo()}
-        </span>
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse ml-1 rtl:ml-0 rtl:mr-1 shrink-0" title={state.language === 'ku' ? 'پەیوەستکراو / سەیڤ کراوە' : 'Connected / Saved'} />
+      <div 
+        className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-background dark:bg-background/40 border border-border rounded-full text-[10px] select-none shadow-sm" 
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
+        {/* Project Name Capsule */}
+        <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-secondary dark:bg-secondary/80 border border-border rounded-full font-bold text-foreground max-w-[140px] shadow-sm">
+          <FileText size={11} className="text-muted-foreground shrink-0" />
+          <span className="truncate" title={currentFilePath || undefined}>
+            {getFileName(currentFilePath)}
+          </span>
+        </div>
+        
+        {/* Photos Mode Stats */}
+        {state.mode === 'photos' && (
+          <>
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-secondary/50 dark:bg-secondary/30 border border-border/80 rounded-full font-bold text-muted-foreground">
+              <ImageIcon size={11} className="shrink-0 text-muted-foreground" />
+              <span>
+                {state.photos.filter(Boolean).length} {state.language === 'ku' ? 'وێنە' : state.language === 'ar' ? 'صورة' : 'Photos'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-secondary/50 dark:bg-secondary/30 border border-border/80 rounded-full font-bold text-muted-foreground">
+              <Layers size={11} className="shrink-0 text-muted-foreground" />
+              <span>
+                {state.manualPageCount} {state.language === 'ku' ? 'پەڕە' : state.language === 'ar' ? 'صفحة' : 'Pages'}
+              </span>
+            </div>
+          </>
+        )}
+
+        {/* Invoice Mode Stats */}
+        {state.mode === 'invoice' && (
+          <>
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-secondary/50 dark:bg-secondary/30 border border-border/80 rounded-full font-bold text-muted-foreground">
+              {React.createElement(getModeIcon('invoice'), { size: 11, className: "shrink-0 text-muted-foreground" })}
+              <span>
+                {state.invoicePhotos.filter(Boolean).length} {state.language === 'ku' ? 'پسوڵە' : state.language === 'ar' ? 'فاتورة' : 'Invoices'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-secondary/50 dark:bg-secondary/30 border border-border/80 rounded-full font-bold text-muted-foreground">
+              <Layers size={11} className="shrink-0 text-muted-foreground" />
+              <span>
+                {Math.ceil(Math.max(0, ((state.settings.invoiceEndNumber ?? 100) - (state.settings.invoiceStartNumber ?? 1) + 1)) / 2)} {state.language === 'ku' ? 'پەڕە' : state.language === 'ar' ? 'صفحة' : 'Pages'}
+              </span>
+            </div>
+          </>
+        )}
+
+        {/* Other Modes Stats */}
+        {state.mode !== 'photos' && state.mode !== 'invoice' && (
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-secondary/50 dark:bg-secondary/30 border border-border/80 rounded-full font-bold text-muted-foreground">
+            {React.createElement(getModeIcon(state.mode), { size: 11, className: "shrink-0 text-muted-foreground" })}
+            <span>{getModeContextInfo()}</span>
+          </div>
+        )}
+
+        {/* Status Indicator */}
+        <div className="flex items-center justify-center pl-1 rtl:pl-0 rtl:pr-1 shrink-0">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" title={state.language === 'ku' ? 'پەیوەستکراو / سەیڤ کراوە' : 'Connected / Saved'}></span>
+          </span>
+        </div>
       </div>
 
       {/* Actions */}
@@ -872,7 +926,7 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
             className="h-8 w-8 rounded-md hover:bg-zinc-200/90 dark:hover:bg-zinc-700/90 hover:text-foreground text-muted-foreground transition-all duration-150 relative focus:outline-none"
           >
             <FolderOpen size={16} />
-            {!isElectron && <input type="file" ref={fileInputRef} className="hidden" accept=".pppro" onChange={handleOpenProject} />}
+             {!isElectron && <input type="file" ref={fileInputRef} className="hidden" accept=".cyr,.ppfree,.pppro" onChange={handleOpenProject} />}
           </Button>
         </div>
 
@@ -1372,10 +1426,56 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
       {/* Find & Replace Modal */}
       <FindReplaceModal isOpen={showFindReplace} onClose={() => setShowFindReplace(false)} />
 
-
-
       {/* Update Modal */}
       <UpdateModal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} language={state.language === 'ku' ? 'ku' : 'en'} />
+
+      {/* Custom Update Toast Notification - Shadcn Style (Black & White) */}
+      {updateToastData && (
+        <div 
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] animate-slide-down"
+          dir={state.language === 'ku' ? 'rtl' : 'ltr'}
+        >
+          <div className={`bg-background border border-border rounded-lg shadow-lg flex items-start gap-3 p-4 min-w-[400px] max-w-[90vw] backdrop-blur-sm ${state.language === 'ku' ? 'font-kufi' : ''}`}>
+            {/* Icon */}
+            <div className="flex-shrink-0 w-9 h-9 bg-foreground/10 rounded-full flex items-center justify-center mt-0.5">
+              <Download size={18} className="text-foreground" />
+            </div>
+            
+            {/* Content */}
+            <div className="flex-1 min-w-0 pt-0.5">
+              <div className="font-semibold text-sm text-foreground mb-1">
+                {state.language === 'ku' ? 'نوێکردنەوەی نوێ بەردەستە' : 'New Update Available'}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {state.language === 'ku' 
+                  ? `وەشانی ${updateToastData.version} ئامادەیە بۆ دابەزاندن`
+                  : `Version ${updateToastData.version} is ready to download`
+                }
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => {
+                  setUpdateToastData(null);
+                  setShowUpdateModal(true);
+                }}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-foreground text-background hover:bg-foreground/90 h-9 px-4 transition-colors"
+              >
+                {state.language === 'ku' ? 'باشە' : 'OK'}
+              </button>
+              <button
+                onClick={() => setUpdateToastData(null)}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground h-9 w-9 transition-colors"
+                title={state.language === 'ku' ? 'داخستن' : 'Close'}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

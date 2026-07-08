@@ -1,4 +1,4 @@
-Photo Printer Pro - End User License Agreement
+Cyber Report - End User License Agreement
 
 Copyright (c) 2024 Azher Sallah. All rights reserved.
 
@@ -23,4 +23,3 @@ you agree to the following terms:
    THE USE OF THIS SOFTWARE.
 
 For support: azhersallah@gmail.com
-Website: https://photoprinterpro.netlify.app

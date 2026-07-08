@@ -13,6 +13,14 @@ const isDev = !require('electron').app.isPackaged;
 let mainWindow;
 let fileToOpen = null;
 
+// On Windows, double-clicking a .ppfree or .pppro file passes it as a command-line argument.
+// We grab it here at startup, before the window is created.
+const args = process.argv.slice(isDev ? 2 : 1);
+const fileArg = args.find(a => a.endsWith('.ppfree') || a.endsWith('.pppro') || a.endsWith('.cyr'));
+if (fileArg) {
+  fileToOpen = fileArg;
+}
+
 // ============================================
 // APP SETTINGS & TASKS - JSON FILE
 // ============================================
@@ -131,6 +139,38 @@ function createWindow() {
         }
       }, 1000);
     }
+    
+    // Auto-check for updates when app starts (after 3 seconds)
+    setTimeout(async () => {
+      console.log('[Update] Starting auto-check for updates...');
+      console.log('[Update] isDev =', isDev, ', isPackaged =', app.isPackaged);
+      try {
+        const release = await fetchLatestRelease();
+        const latestVersion = release.tag_name.replace('v', '');
+        const currentVersion = app.getVersion();
+        console.log(`[Update] Current version: ${currentVersion}, Latest version: ${latestVersion}`);
+        const isNewer = latestVersion.localeCompare(currentVersion, undefined, { numeric: true }) > 0;
+        
+        if (isNewer && mainWindow) {
+          console.log('[Update] New version available! Sending notification...');
+          latestReleaseInfo = release;
+          mainWindow.webContents.send('update-status', {
+            status: 'available',
+            version: latestVersion
+          });
+          mainWindow.webContents.send('update-available-toast', {
+            version: latestVersion,
+            message: 'نوێکردنەوەیەکی نوێ بەردەستە',
+            messageEn: 'New update available'
+          });
+          console.log('[Update] Toast notification sent!');
+        } else {
+          console.log('[Update] App is up to date');
+        }
+      } catch (err) {
+        console.log('[Update] Auto-check for updates failed:', err.message);
+      }
+    }, 3000);
   });
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -225,8 +265,8 @@ ipcMain.handle('save-project-as', async (event, { content, defaultName }) => {
   try {
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save Project As',
-      defaultPath: defaultName || 'project.ppfree',
-      filters: [{ name: 'Photo Printer Free Project', extensions: ['ppfree'] }]
+      defaultPath: defaultName || 'project.cyr',
+      filters: [{ name: 'Cyber Report Project', extensions: ['cyr'] }]
     });
 
     if (result.canceled || !result.filePath) return { success: false, canceled: true };
@@ -247,11 +287,20 @@ ipcMain.handle('get-current-project-path', () => currentProjectPath);
 ipcMain.handle('set-current-project-path', (event, filePath) => { currentProjectPath = filePath; return true; });
 ipcMain.handle('set-window-title', (event, title) => { if (mainWindow) mainWindow.setTitle(title); return true; });
 
+ipcMain.handle('open-dropped-project', async (event, filePath) => {
+  if (filePath) openProjectFile(filePath);
+  return true;
+});
+
 ipcMain.handle('open-project-dialog', async () => {
   try {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Open Project',
-      filters: [{ name: 'Photo Printer Free Project', extensions: ['ppfree'] }],
+      filters: [
+        { name: 'Cyber Report Projects (*.cyr, *.ppfree, *.pppro)', extensions: ['cyr', 'ppfree', 'pppro'] },
+        { name: 'Cyber Report Project (*.cyr)', extensions: ['cyr'] },
+        { name: 'Legacy Projects (*.ppfree, *.pppro)', extensions: ['ppfree', 'pppro'] }
+      ],
       properties: ['openFile']
     });
 
@@ -274,7 +323,7 @@ function openProjectFile(filePath) {
     const content = fs.readFileSync(filePath, 'utf-8');
     currentProjectPath = filePath;
     if (mainWindow) {
-      mainWindow.webContents.send('open-project-file', { content, filePath });
+      mainWindow.webContents.send('open-project-encrypted', { content, filePath });
     }
   } catch (err) {
     console.error('Failed to read project file', err);
@@ -323,11 +372,39 @@ ipcMain.handle('check-for-updates', async () => {
     const isNewer = latestVersion.localeCompare(currentVersion, undefined, { numeric: true }) > 0;
 
     if (isNewer) {
+      // Notify the renderer that an update is available
+      if (mainWindow) {
+        mainWindow.webContents.send('update-status', {
+          status: 'available',
+          version: latestVersion
+        });
+        
+        // Send toast notification for update availability
+        mainWindow.webContents.send('update-available-toast', {
+          version: latestVersion,
+          message: 'نوێکردنەوەیەکی نوێ بەردەستە',
+          messageEn: 'New update available'
+        });
+      }
       return { success: true, updateAvailable: true, version: latestVersion };
     } else {
+      // Notify the renderer that the app is up to date
+      if (mainWindow) {
+        mainWindow.webContents.send('update-status', {
+          status: 'not-available',
+          version: currentVersion
+        });
+      }
       return { success: true, updateAvailable: false, version: currentVersion };
     }
   } catch (error) {
+    // Notify the renderer of the error
+    if (mainWindow) {
+      mainWindow.webContents.send('update-status', {
+        status: 'error',
+        error: error.message
+      });
+    }
     return { success: false, error: error.message };
   }
 });
@@ -613,7 +690,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 <div class="header">
   <div class="header-icon">${isFolder ? iconFolder : iconCamera}</div>
   <div>
-    <div class="header-title">Photo Printer</div>
+    <div class="header-title">Cyber Report</div>
     <div class="header-sub">${isFolder ? 'Wireless File Hub' : 'Wireless Photo Receiver'}</div>
   </div>
 </div>
@@ -624,7 +701,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
       ${isFolder ? iconFolder : iconCamera}
       <span>${isFolder ? 'Folder Mode' : 'App Workspace Mode'}</span>
     </div>
-    ${isFolder ? `<div class="mode-path">${folderPath}</div>` : `<div style="font-size:.7rem;color:var(--muted)">Files will load directly into the Photo Printer editor workspace.</div>`}
+    ${isFolder ? `<div class="mode-path">${folderPath}</div>` : `<div style="font-size:.7rem;color:var(--muted)">Files will load directly into the Cyber Report workspace.</div>`}
   </div>
 
   <div class="drop-zone" id="dz">
@@ -776,13 +853,30 @@ function renderPreview(files){
 // Handle file input selection with accumulation (append to state array)
 fileInput.addEventListener('change',()=>{
   if(fileInput.files.length){
+    let rejected = 0;
     Array.from(fileInput.files).forEach(f=>{
+      // Filter: In app workspace mode, only accept images
+      if(!isFolder && !f.type.startsWith('image/') && !/\\.(heic|heif)$/i.test(f.name)){
+        rejected++;
+        return; // Skip non-image files in workspace mode
+      }
+      
       // Avoid duplicate files by checking name and size
       const exists = selectedFiles.some(old => old.name === f.name && old.size === f.size);
       if(!exists){
         selectedFiles.push(f);
       }
     });
+    
+    // Show warning if files were rejected
+    if(rejected > 0 && !isFolder){
+      statusCard.style.display='flex';
+      statusCard.className='status-card err';
+      statusIcon.innerHTML=iconWarnSVG;
+      statusText.textContent='Only image files are allowed in App Workspace mode. '+rejected+' file(s) were skipped.';
+      setTimeout(()=>{ statusCard.style.display='none'; }, 4000);
+    }
+    
     fileInput.value = ''; // clear input so change event fires again for same files
     renderPreview(selectedFiles);
   }
@@ -791,6 +885,7 @@ fileInput.addEventListener('change',()=>{
 clearBtn.addEventListener('click',()=>{
   selectedFiles = [];
   renderPreview(selectedFiles);
+  statusCard.style.display='none';
 });
 
 // Drag & drop
@@ -799,12 +894,29 @@ dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
 dz.addEventListener('drop',e=>{
   e.preventDefault();dz.classList.remove('drag');
   if(e.dataTransfer.files.length){
+    let rejected = 0;
     Array.from(e.dataTransfer.files).forEach(f=>{
+      // Filter: In app workspace mode, only accept images
+      if(!isFolder && !f.type.startsWith('image/') && !/\\.(heic|heif)$/i.test(f.name)){
+        rejected++;
+        return; // Skip non-image files in workspace mode
+      }
+      
       const exists = selectedFiles.some(old => old.name === f.name && old.size === f.size);
       if(!exists){
         selectedFiles.push(f);
       }
     });
+    
+    // Show warning if files were rejected
+    if(rejected > 0 && !isFolder){
+      statusCard.style.display='flex';
+      statusCard.className='status-card err';
+      statusIcon.innerHTML=iconWarnSVG;
+      statusText.textContent='Only image files are allowed in App Workspace mode. '+rejected+' file(s) were skipped.';
+      setTimeout(()=>{ statusCard.style.display='none'; }, 4000);
+    }
+    
     renderPreview(selectedFiles);
   }
 });
@@ -840,7 +952,7 @@ sendBtn.addEventListener('click',async()=>{
   let ok=0,fail=0;
   for(let i=0;i<filesToUpload.length;i++){
     progFile.textContent='('+(i+1)+'/'+filesToUpload.length+') '+filesToUpload[i].name;
-    const success=await uploadFile(filesToUpload[i],i,filesToUpload[i].name);
+    const success=await uploadFile(filesToUpload[i],i,filesToUpload.length);
     if(success){
       ok++;
     } else {
@@ -1095,7 +1207,7 @@ Write-Output "OK"
       })();
       const hint = isAdmin
         ? 'Your Wi-Fi driver does not support Windows Hosted Network. Please enable Mobile Hotspot from Windows Settings â†’ Network & Internet â†’ Mobile hotspot, then use the Standard Wi-Fi mode instead.'
-        : 'Please run Photo Printer as Administrator to use the hotspot feature, or enable Mobile Hotspot from Windows Settings â†’ Network & Internet â†’ Mobile hotspot and use Standard mode.';
+        : 'Please run Cyber Report as Administrator to use the hotspot feature, or enable Mobile Hotspot from Windows Settings â†’ Network & Internet â†’ Mobile hotspot and use Standard mode.';
       return { success: false, error: hint };
     }
   }
@@ -1178,21 +1290,6 @@ app.on('open-file', (event, path) => {
   }
 });
 
-// Single instance
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-      
-      const filePath = commandLine.find(arg => arg.endsWith('.ppfree'));
-      if (filePath) {
-        openProjectFile(filePath);
-      }
-    }
-  });
-}
+// Multi-instance support: Allow multiple windows for different projects
+// Each double-click opens a new independent window
+// Removed single instance lock to allow multiple project windows

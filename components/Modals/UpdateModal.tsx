@@ -159,6 +159,8 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, language = '
     <div 
       className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in ${isKurdish ? 'font-kufi' : ''}`}
       dir={isKurdish ? 'rtl' : 'ltr'}
+      role="dialog"
+      aria-modal="true"
     >
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
       

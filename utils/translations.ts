@@ -3,7 +3,7 @@ import { Language } from '../types';
 
 export const translations: Record<string, Record<Language, string>> = {
   // General
-  'app.title': { en: 'Photo Printer', ku: 'فۆتۆ پرینتەر', ar: 'طابعة الصور' },
+  'app.title': { en: 'Cyber Report', ku: 'سایبەر ڕاپۆرت', ar: 'تقرير سايبر' },
   'app.subtitle': { en: 'Professional Tool', ku: 'ئامرازی پیشەیی', ar: 'أداة احترافية' },
   'app.untitled': { en: 'Untitled', ku: 'بێناو', ar: 'بدون عنوان' },
   
@@ -238,7 +238,7 @@ export const translations: Record<string, Record<Language, string>> = {
   'btn.upload': { en: 'Upload', ku: 'بارکردن', ar: 'رفع' },
   'btn.change': { en: 'Change', ku: 'گۆڕین', ar: 'تغيير' },
   'btn.remove': { en: 'Remove', ku: 'سڕینەوە', ar: 'إزالة' },
-  'footer.version': { en: 'v2.0.0 • Photo Printer Pro', ku: 'وەشانی ٢.٠.٠ • فۆتۆ پرینتەر پڕۆ', ar: 'الإصدار ٢.٠.٠ • فوتو برينتر برو' },
+  'footer.version': { en: 'v2.0.0 • Cyber Report', ku: 'وەشانی ٢.٠.٠ • سایبەر ڕاپۆرت', ar: 'الإصدار ٢.٠.٠ • تقرير سايبر' },
 
   // DropZone
   'drop.title': { en: 'Add Photos', ku: 'زیادکردنی وێنە', ar: 'إضافة صور' },
@@ -420,7 +420,7 @@ export const translations: Record<string, Record<Language, string>> = {
 
   // Stamp Creator Translations
   'stamp.title': { en: 'Stamp Creator', ku: 'ئامرازی دروستکردنی مۆر', ar: 'مصمم الأختام' },
-  'stamp.subtitle': { en: 'Design and print professional stamps', ku: 'دیزاین و چاپکردنی مۆری پیشەیی', ar: 'تصميم وطباعة الأختام الاحترافية' },
+  'stamp.subtitle': { en: 'Design and customize professional stamps', ku: 'دیزاین و دروستکردنی مۆری پیشەیی', ar: 'تصميم وتخصيص الأختام الاحترافية' },
   'stamp.template': { en: 'Templates', ku: 'نموونەکان (تێمپڵەیت)', ar: 'النماذج' },
   'stamp.settings': { en: 'Customization Settings', ku: 'ڕێکخستنەکانی دیزاین', ar: 'إعدادات التصميم' },
   'stamp.shape': { en: 'Stamp Shape', ku: 'شێوەی مۆر', ar: 'شكل الختم' },

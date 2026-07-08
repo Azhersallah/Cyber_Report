@@ -96,7 +96,12 @@ const PrintModal: React.FC<PrintModalProps> = ({ totalPages, onClose, onConfirm 
   const isAllSelected = selectedCount === totalPages;
 
   const modalContent = (
-    <div className={`fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4 animate-fade-in ${isKurdish ? 'font-kufi' : ''}`} dir={isKurdish ? 'rtl' : 'ltr'}>
+    <div 
+      className={`fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4 animate-fade-in ${isKurdish ? 'font-kufi' : ''}`} 
+      dir={isKurdish ? 'rtl' : 'ltr'}
+      role="dialog"
+      aria-modal="true"
+    >
       <Card className="w-full max-w-2xl flex flex-col max-h-[85vh]">
         
         <CardHeader className="pb-3 border-b border-border">

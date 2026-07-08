@@ -90,7 +90,7 @@ const ExportFormatDialog: React.FC<ExportFormatDialogProps> = ({
             <div className="flex flex-col items-start text-left">
               <span className="font-medium">PDF</span>
               <span className="text-xs text-muted-foreground">
-                {language === 'ku' ? 'بۆ چاپکردن و هاوبەشکردن' : language === 'ar' ? 'للطباعة والمشاركة' : 'For printing and sharing'}
+                {language === 'ku' ? 'بۆ هەناردەکردن و هاوبەشکردن' : language === 'ar' ? 'للتصدير والمشاركة' : 'For exporting and sharing'}
               </span>
             </div>
           </Button>

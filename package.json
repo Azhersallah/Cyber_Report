@@ -1,19 +1,18 @@
 {
-  "name": "photo-printer-free",
+  "name": "cyber-report",
   "version": "1.0.1",
   "type": "module",
   "main": "loader.cjs",
-  "description": "Professional Photo Printing Tool for print shops",
+  "description": "Professional Image Reporting and Analysis Tool",
   "author": {
     "name": "Azher Sallah",
     "email": "azhersallah1@gmail.com"
   },
   "publisher": "Azher Sallah",
-  "homepage": "https://photo-printer-pro.netlify.app/",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Azhersallah/Photo-Printer-Free"
+    "url": "https://github.com/Azhersallah/Cyber_Report"
   },
   "scripts": {
     "dev": "vite",
@@ -70,8 +69,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.photoprinterfree.app",
-    "productName": "Photo Printer Free",
+    "appId": "com.cyberreport.app",
+    "productName": "Cyber Report",
     "directories": {
       "output": "release"
     },
@@ -87,9 +86,23 @@
     ],
     "fileAssociations": [
       {
+        "ext": "cyr",
+        "name": "Cyber Report Project",
+        "description": "Cyber Report Project File",
+        "icon": "build/file-icon.ico",
+        "role": "Editor"
+      },
+      {
         "ext": "ppfree",
-        "name": "Photo Printer Free Project",
-        "description": "Photo Printer Free Project File",
+        "name": "Cyber Report Project",
+        "description": "Cyber Report Project File",
+        "icon": "build/file-icon.ico",
+        "role": "Editor"
+      },
+      {
+        "ext": "pppro",
+        "name": "Cyber Report Project",
+        "description": "Cyber Report Project File",
         "icon": "build/file-icon.ico",
         "role": "Editor"
       }
@@ -97,14 +110,14 @@
     "publish": {
       "provider": "github",
       "owner": "Azhersallah",
-      "repo": "Photo-Printer-Free",
+      "repo": "Cyber_Report",
       "private": false
     },
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico",
       "publisherName": "Azher Sallah",
-      "legalTrademarks": "Photo Printer Free © 2024 Azher Sallah",
+      "legalTrademarks": "Cyber Report © 2024 Azher Sallah",
       "requestedExecutionLevel": "asInvoker"
     },
     "mac": {
@@ -127,7 +140,7 @@
       "installerLanguages": [
         "en_US"
       ],
-      "shortcutName": "Photo Printer Free"
+      "shortcutName": "Cyber Report"
     },
     "copyright": "Copyright © 2024 Azher Sallah. All rights reserved."
   }

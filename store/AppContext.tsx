@@ -53,6 +53,7 @@ type Action =
   | { type: 'DELETE_PAGE'; payload: { pageIndex: number; startIndex: number; count: number } }
   | { type: 'SET_LAYOUT'; payload: LayoutType }
   | { type: 'SET_PAGE_LAYOUT'; payload: { pageIndex: number; layout: LayoutType } }
+  | { type: 'CLEAR_ALL_PAGE_LAYOUTS' }
   | { type: 'UPDATE_SETTINGS'; payload: Partial<AppSettings> }
   | { type: 'TOGGLE_THEME' }
   | { type: 'SET_LANGUAGE'; payload: Language }
@@ -325,21 +326,54 @@ const appReducer = (state: AppState, action: Action): AppState => {
         delete migratedSettings.invoiceTotal;
       }
 
-      // Migrate old resumeCustomization (single object) to per-template map
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let migratedCustomization = projectContent.resumeCustomization as any;
-      if (migratedCustomization && (migratedCustomization.colors !== undefined || migratedCustomization.fontFamily !== undefined || migratedCustomization.fontSize !== undefined || migratedCustomization.spacing !== undefined)) {
-        // Old format: single CustomizationOptions object -> wrap in per-template map
-        const templateId = projectContent.selectedResumeTemplate || 'professional';
-        migratedCustomization = { [templateId]: migratedCustomization };
+      const PHOTO_LAYOUTS = ['1', '2', '2col', '4', '1text', '1text-side', '2text', 'onlytext'];
+      const cleanGlobalLayout = PHOTO_LAYOUTS.includes(projectContent.globalLayout) ? projectContent.globalLayout : '1';
+      const cleanLastPhotosLayout = PHOTO_LAYOUTS.includes(projectContent.lastPhotosLayout) ? projectContent.lastPhotosLayout : '1';
+      
+      const cleanPageLayouts: Record<number, LayoutType> = {};
+      if (projectContent.pageLayouts) {
+        for (const [pageStr, layout] of Object.entries(projectContent.pageLayouts)) {
+          const pageNum = parseInt(pageStr, 10);
+          if (!isNaN(pageNum)) {
+            cleanPageLayouts[pageNum] = PHOTO_LAYOUTS.includes(layout as string) ? (layout as LayoutType) : '1';
+          }
+        }
       }
 
       return {
         ...state,
-        ...projectContent,
+        // Only load photos and layout/content related fields (Photos & Report data)
+        photos: projectContent.photos || [],
+        globalLayout: cleanGlobalLayout,
+        lastPhotosLayout: cleanLastPhotosLayout,
+        globalTitle: projectContent.globalTitle || 'New Project',
+        pageTitles: projectContent.pageTitles || {},
+        pageSubtitles: projectContent.pageSubtitles || {},
+        textAreas: projectContent.textAreas || {},
+        pageLayouts: cleanPageLayouts,
+        modePageLayouts: undefined, // Free version only has Photos mode, discard cached layouts for other modes
+        manualPageCount: projectContent.manualPageCount ?? 1,
+        selectedPageIndex: projectContent.selectedPageIndex ?? 0,
+
+        // Reset all other unsupported modes/features to initial empty states (Free version doesn't support them)
+        cardPhotos: [],
+        invoicePhotos: [],
+        idPhotos: [],
         mode: 'photos',
-        resumeCustomization: migratedCustomization || {},
-        stampData: projectContent.stampData || initialState.stampData,
+        resumeData: initialState.resumeData,
+        selectedResumeTemplate: initialState.selectedResumeTemplate,
+        resumeCustomization: {},
+        resumeLanguage: 'en',
+        businessCardData: initialState.businessCardData,
+        selectedBusinessCardTemplate: initialState.selectedBusinessCardTemplate,
+        businessCardCustomization: {},
+        businessCardDesignMode: false,
+        businessCardLanguage: 'en',
+        selectedBusinessCardIndex: null,
+        businessCardSizes: initialState.businessCardSizes,
+        qrCodeData: initialState.qrCodeData,
+        stampData: initialState.stampData,
+
         settings: {
           ...state.settings,
           ...migratedSettings,
@@ -352,7 +386,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 
     case 'SET_MODE': {
-      const targetMode = 'photos';
+      const targetMode = 'photos' as AppMode;
       const currentMode = state.mode;
 
       let nextLastPhotosLayout = state.lastPhotosLayout;
@@ -776,6 +810,11 @@ const appReducer = (state: AppState, action: Action): AppState => {
           ...state.pageLayouts,
           [action.payload.pageIndex]: action.payload.layout
         }
+      };
+    case 'CLEAR_ALL_PAGE_LAYOUTS':
+      return {
+        ...state,
+        pageLayouts: {}
       };
     case 'UPDATE_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.payload } };

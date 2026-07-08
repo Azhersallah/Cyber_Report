@@ -1,5 +1,5 @@
 
-const SECRET_PASSPHRASE = "photo-printer-pro-secure-vault-2024";
+const SECRET_PASSPHRASE = "cyber-report-secure-vault-2026";
 const MAGIC_HEADER = "PPPRO";
 
 /**

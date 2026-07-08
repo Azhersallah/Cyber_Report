@@ -180,6 +180,8 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
     <div 
       className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in ${isKurdish ? 'font-kufi' : ''}`}
       dir={isKurdish ? 'rtl' : 'ltr'}
+      role="dialog"
+      aria-modal="true"
     >
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
       
@@ -390,7 +392,9 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
                 }`} />
                 <span className="text-sm font-medium flex-1">
                   {receivedCount > 0
-                    ? t('transfer.photosReceived').replace('{count}', String(receivedCount))
+                    ? activeTab === 'folder'
+                      ? (isKurdish ? `${receivedCount} فایل وەرگیرا` : `${receivedCount} file${receivedCount !== 1 ? 's' : ''} received`)
+                      : t('transfer.photosReceived').replace('{count}', String(receivedCount))
                     : t('transfer.waiting')
                   }
                 </span>

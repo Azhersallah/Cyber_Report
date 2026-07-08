@@ -50,12 +50,22 @@ const DropZone: React.FC = () => {
   };
 
   const onDrop = (e: React.DragEvent) => {
+    // Check if it's a project file - if so, let the global handler in App.tsx deal with it
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const firstName = e.dataTransfer.files[0].name.toLowerCase();
+      if (firstName.endsWith('.pppro') || firstName.endsWith('.ppfree') || firstName.endsWith('.cyr')) {
+        // Don't prevent default - let it bubble to App.tsx
+        return;
+      }
+    }
+    
     e.preventDefault();
     e.stopPropagation();
     handleFiles(e.dataTransfer.files);
   };
 
   const onDragOver = (e: React.DragEvent) => {
+    // Allow all drags - we'll filter in onDrop
     e.preventDefault();
     e.stopPropagation();
   };
@@ -66,6 +76,7 @@ const DropZone: React.FC = () => {
 
   return (
     <div 
+      data-drop-target="dropzone"
       onClick={handleClick}
       onDrop={onDrop}
       onDragOver={onDragOver}

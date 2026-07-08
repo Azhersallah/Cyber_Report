@@ -24,8 +24,8 @@ import ExportFormatDialog from '../Modals/ExportFormatDialog';
 import { FontPicker } from '../ui/font-picker';
 import ImageEditor from '../Editor/ImageEditor';
 
-import type { ResumeSection } from '../Resume/ResumeEditor';
-import type { BusinessCardSection } from '../BusinessCard/BusinessCardEditor';
+export type BusinessCardSection = 'info' | 'contact' | 'media' | 'template' | 'customize';
+export type ResumeSection = 'personal' | 'photo' | 'experience' | 'education' | 'skills' | 'languages' | 'template' | 'customize';
 
 interface SidebarProps {
     isActivated?: boolean;
@@ -393,11 +393,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
         if (id === '2') newLayout = currentActiveLayout === '2' ? '2col' : '2';
         else if (id === '1text') newLayout = currentActiveLayout === '1text' ? '1text-side' : '1text';
 
-        if (state.selectedPageIndex !== null) {
-            dispatch({ type: 'SET_PAGE_LAYOUT', payload: { pageIndex: state.selectedPageIndex, layout: newLayout } });
-        } else {
-            dispatch({ type: 'SET_LAYOUT', payload: newLayout });
-        }
+        // Apply to all pages: Update global layout and clear all page-specific layouts
+        dispatch({ type: 'SET_LAYOUT', payload: newLayout });
+        
+        // Clear all page-specific layouts so they all use the new global layout
+        dispatch({ type: 'CLEAR_ALL_PAGE_LAYOUTS' });
     };
 
     const getLayoutButtonData = (layout: typeof LAYOUTS[0]) => {

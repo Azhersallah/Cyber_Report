@@ -1363,7 +1363,12 @@ const ImageEditor: React.FC<ImageEditorProps> = ({ photo, onClose, onSave }) => 
   const isKurdish = state.language === 'ku';
 
   const modalContent = (
-    <div className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4 ${isKurdish ? 'font-kufi' : 'font-sans'}`} dir={isKurdish ? 'rtl' : 'ltr'}>
+    <div 
+      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4 ${isKurdish ? 'font-kufi' : 'font-sans'}`} 
+      dir={isKurdish ? 'rtl' : 'ltr'}
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="w-full max-w-6xl h-[90vh] bg-card rounded-xl shadow-2xl overflow-hidden flex flex-col border border-border">
         {/* HEADER */}
         <div className="h-12 px-4 border-b border-border bg-card flex items-center justify-between flex-shrink-0">

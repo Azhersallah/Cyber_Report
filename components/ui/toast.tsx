@@ -8,10 +8,11 @@ interface Toast {
   id: string;
   message: string;
   type: ToastType;
+  duration?: number;
 }
 
 interface ToastContextType {
-  showToast: (message: string, type?: ToastType) => void;
+  showToast: (message: string, type?: ToastType, duration?: number) => void;
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
@@ -28,38 +29,48 @@ const ToastItem: React.FC<{ toast: Toast; onRemove: (id: string) => void }> = ({
   useEffect(() => {
     const timer = setTimeout(() => {
       onRemove(toast.id);
-    }, 3000);
+    }, toast.duration || 3000);
     return () => clearTimeout(timer);
-  }, [toast.id, onRemove]);
+  }, [toast.id, toast.duration, onRemove]);
 
   const icons = {
-    success: <Check size={16} />,
-    error: <X size={16} />,
-    warning: <AlertCircle size={16} />,
-    info: <Info size={16} />,
+    success: <Check size={18} strokeWidth={2.5} />,
+    error: <X size={18} strokeWidth={2.5} />,
+    warning: <AlertCircle size={18} strokeWidth={2.5} />,
+    info: <Info size={18} strokeWidth={2.5} />,
   };
 
-  const colors = {
-    success: 'bg-green-500 text-white',
-    error: 'bg-red-500 text-white',
-    warning: 'bg-yellow-500 text-white',
-    info: 'bg-blue-500 text-white',
+  const styles = {
+    success: 'bg-background border-border text-foreground',
+    error: 'bg-background border-border text-foreground',
+    warning: 'bg-background border-border text-foreground',
+    info: 'bg-background border-border text-foreground',
+  };
+
+  const iconStyles = {
+    success: 'text-foreground',
+    error: 'text-foreground',
+    warning: 'text-foreground',
+    info: 'text-foreground',
   };
 
   return (
     <div
       className={cn(
-        'flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg animate-slide-up',
-        colors[toast.type]
+        'flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg backdrop-blur-sm animate-slide-up min-w-[300px]',
+        styles[toast.type]
       )}
     >
-      {icons[toast.type]}
-      <span className="text-sm font-medium">{toast.message}</span>
+      <div className={cn('flex-shrink-0', iconStyles[toast.type])}>
+        {icons[toast.type]}
+      </div>
+      <span className="text-sm font-medium flex-1">{toast.message}</span>
       <button
         onClick={() => onRemove(toast.id)}
-        className="ml-2 hover:opacity-70 transition-opacity"
+        className="flex-shrink-0 rounded-sm opacity-70 hover:opacity-100 transition-opacity"
+        aria-label="Close"
       >
-        <X size={14} />
+        <X size={16} />
       </button>
     </div>
   );
@@ -68,9 +79,9 @@ const ToastItem: React.FC<{ toast: Toast; onRemove: (id: string) => void }> = ({
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const showToast = useCallback((message: string, type: ToastType = 'success') => {
+  const showToast = useCallback((message: string, type: ToastType = 'success', duration?: number) => {
     const id = Date.now().toString();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type, duration }]);
   }, []);
 
   const removeToast = useCallback((id: string) => {
@@ -80,11 +91,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {/* Toast Container */}
-      <div className="fixed bottom-4 right-4 z-[10000] flex flex-col gap-2">
-        {toasts.map((toast) => (
-          <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
-        ))}
+      {/* Toast Container - Shadcn UI Style */}
+      <div className="fixed bottom-4 right-4 z-[10000] flex flex-col gap-2 pointer-events-none">
+        <div className="flex flex-col gap-2 pointer-events-auto">
+          {toasts.map((toast) => (
+            <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
+          ))}
+        </div>
       </div>
     </ToastContext.Provider>
   );

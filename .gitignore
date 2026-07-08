@@ -30,11 +30,18 @@ release/
 *.asar
 latest.yml
 
-# Sensitive files
+# Sensitive files and tokens
 .env
+.env*
 .env.local
 service-account.json
 app.config.dat
+.npmrc
+.github/
+*token*
+*key*
+*secret*
+credentials*
 
 # Unnecessary folders
 LicenseManager/

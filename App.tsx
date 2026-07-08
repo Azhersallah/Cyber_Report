@@ -16,7 +16,7 @@ import { getTranslation } from './utils/translations';
 import { Plus, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { decryptProjectData } from './utils/encryption';
 import { cn } from './lib/utils';
-import { ToastProvider } from './components/ui/toast';
+import { ToastProvider, useToast } from './components/ui/toast';
 
 const AddPageButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <div className="relative group py-6 flex items-center justify-center no-print w-full">
@@ -85,6 +85,7 @@ const FloatingZoomControls: React.FC<{ maxPossibleZoom: number }> = ({ maxPossib
 
 const MainContent: React.FC = () => {
   const { state, dispatch } = useApp();
+  const { showToast } = useToast();
   const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [pagesToPrint, setPagesToPrint] = useState<number[] | null>(null);
@@ -92,6 +93,7 @@ const MainContent: React.FC = () => {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ pageIndex: number; startIndex: number; count: number } | null>(null);
   const [resetConfirmation, setResetConfirmation] = useState<{ pageIndex: number; startIndex: number; count: number } | null>(null);
   const [droppedProjectFile, setDroppedProjectFile] = useState<string | null>(null);
+  const [pendingProjectData, setPendingProjectData] = useState<{content: string; filePath?: string} | null>(null);
   const t = (key: string) => getTranslation(key, state.language);
 
 
@@ -109,10 +111,29 @@ const MainContent: React.FC = () => {
       const handleOpenEncryptedProject = async (event: any, data: string | { content: string, filePath: string }) => {
         try {
           // Handle both old format (string) and new format (object)
-          const encryptedContent = typeof data === 'string' ? data : data.content;
-          const decryptedJson = await decryptProjectData(encryptedContent);
-          const parsed = JSON.parse(decryptedJson);
-          dispatch({ type: 'LOAD_PROJECT', payload: parsed });
+          const content = typeof data === 'string' ? data : data.content;
+          const filePath = typeof data === 'object' && data.filePath ? data.filePath : undefined;
+          
+          // Check if there's already a project loaded (user has photos or settings changed)
+          // If not, load directly without confirmation (this is a new window from double-click)
+          const hasProject = state.photos.length > 0 || state.cardPhotos.length > 0;
+          
+          if (hasProject) {
+            // Show confirmation dialog - user might lose unsaved changes
+            setPendingProjectData({ content, filePath });
+          } else {
+            // Load directly - this is a fresh window, no data to lose
+            const decryptedJson = await decryptProjectData(content);
+            const parsed = JSON.parse(decryptedJson);
+            dispatch({ type: 'LOAD_PROJECT', payload: parsed });
+            
+            // Set the file path so the title shows the project name
+            if (filePath) {
+              ipcRenderer.invoke('set-current-project-path', filePath);
+              // Also send event to Header to update currentFilePath state
+              window.dispatchEvent(new CustomEvent('project-file-path-changed', { detail: filePath }));
+            }
+          }
         } catch (err) {
           console.error("IPC Opening Failed:", err);
           alert("Could not open this project file. It may be corrupted or encrypted with a different key.");
@@ -125,11 +146,21 @@ const MainContent: React.FC = () => {
       ipcRenderer.invoke('get-pending-file').then(async (result: any) => {
         if (result && result.success && result.content) {
           try {
+            // On initial mount, photos array is always empty, so load directly without confirmation
+            // This handles the double-click startup case
             const decryptedJson = await decryptProjectData(result.content);
             const parsed = JSON.parse(decryptedJson);
             dispatch({ type: 'LOAD_PROJECT', payload: parsed });
+            
+            // Set the file path so the title shows the project name
+            if (result.filePath) {
+              ipcRenderer.invoke('set-current-project-path', result.filePath);
+              // Also send event to Header to update currentFilePath state
+              window.dispatchEvent(new CustomEvent('project-file-path-changed', { detail: result.filePath }));
+            }
           } catch (err) {
-            console.error("IPC Opening Failed (Pending File):", err);
+            console.error("Failed to load pending file:", err);
+            alert("Could not open this project file. It may be corrupted or encrypted with a different key.");
           }
         }
       });
@@ -138,26 +169,96 @@ const MainContent: React.FC = () => {
         ipcRenderer.removeListener('open-project-encrypted', handleOpenEncryptedProject);
       };
     }
-  }, [dispatch]);
+  }, [dispatch, state.photos.length, state.cardPhotos.length]);
 
-  // Global drag & drop handler for .pppro project files
+  // Global drag & drop handler for project files and background images
   useEffect(() => {
     const handleGlobalDragOver = (e: DragEvent) => {
       e.preventDefault(); // Necessary to allow dropping
     };
 
-    const handleGlobalDrop = (e: DragEvent) => {
+    const handleGlobalDrop = async (e: DragEvent) => {
       const files = e.dataTransfer?.files;
       if (!files || files.length === 0) return;
 
       const file = files[0];
-      if (file.name.toLowerCase().endsWith('.pppro')) {
+      const fileLower = file.name.toLowerCase();
+      
+      // Check if drop is happening inside a modal/dialog - if so, ignore it
+      const targetElement = e.target as HTMLElement;
+      const isInsideModal = targetElement.closest('[role="dialog"]') || 
+                           targetElement.closest('.modal') || 
+                           targetElement.closest('[data-dialog]') ||
+                           targetElement.closest('[data-radix-popper-content-wrapper]');
+      
+      if (isInsideModal) {
+        // Let the modal handle its own drops
+        return;
+      }
+
+      // 1. If it is a project file, ALWAYS intercept globally and load it!
+      if (fileLower.endsWith('.pppro') || fileLower.endsWith('.ppfree') || fileLower.endsWith('.cyr')) {
         e.preventDefault();
-        e.stopPropagation(); // Stop other elements like DropZone from handling this
+        e.stopPropagation();
 
         const filePath = (file as any).path; // Electron file path
         if (filePath && window && (window as any).process && (window as any).process.type === 'renderer') {
           setDroppedProjectFile(filePath);
+        } else {
+          // Web version or fallback: read with FileReader and show confirmation
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            const content = event.target?.result as string;
+            setPendingProjectData({ content });
+          };
+          reader.readAsText(file);
+        }
+        return;
+      }
+
+      // 2. If it is an image file:
+      // If it is dropped on a slot or dropzone, we let the element handle it.
+      // If it is dropped on the background, margins, or any other element, we add it globally!
+      const isDroppedOnSlot = targetElement.closest('[data-drop-target="slot"]') || targetElement.closest('[data-drop-target="dropzone"]');
+
+      if (!isDroppedOnSlot) {
+        const imageFiles: File[] = [];
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          if (f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name)) {
+            imageFiles.push(f);
+          }
+        }
+
+        if (imageFiles.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          try {
+            const { readFileAsDataURL, generateId } = await import('./utils/helpers');
+            const newPhotos: Photo[] = [];
+
+            for (const f of imageFiles) {
+              try {
+                const src = await readFileAsDataURL(f);
+                newPhotos.push({
+                  id: generateId(),
+                  name: f.name,
+                  src,
+                  rotation: 0,
+                  annotations: []
+                });
+              } catch (err) {
+                console.error("Failed to load dropped image", err);
+              }
+            }
+
+            if (newPhotos.length > 0) {
+              dispatch({ type: 'ADD_PHOTOS', payload: newPhotos });
+            }
+          } catch (err) {
+            console.error("Failed to load helpers module", err);
+          }
         }
       }
     };
@@ -170,7 +271,7 @@ const MainContent: React.FC = () => {
       window.removeEventListener('dragover', handleGlobalDragOver, true);
       window.removeEventListener('drop', handleGlobalDrop, true);
     };
-  }, []);
+  }, [dispatch]);
 
   const PAGE_WIDTH_PX = 794;
 
@@ -666,12 +767,72 @@ const MainContent: React.FC = () => {
           message={state.language === 'ku' ? 'ئایا دەتەوێت ئەم پرۆژەیە بکەیتەوە؟ گۆڕانکارییەکانی ئێستات لەدەست دەچێت.' : 'Do you want to load this project? Your current unsaved changes will be lost.'}
           confirmLabel={state.language === 'ku' ? 'کردنەوە' : 'Load Project'}
           cancelLabel={state.language === 'ku' ? 'پاشگەزبوونەوە' : 'Cancel'}
-          onConfirm={() => {
-            const { ipcRenderer } = (window as any).require('electron');
-            ipcRenderer.invoke('open-dropped-project', droppedProjectFile);
-            setDroppedProjectFile(null);
+          onConfirm={async () => {
+            try {
+              const fs = (window as any).require('fs');
+              const content = fs.readFileSync(droppedProjectFile, 'utf-8');
+              const decryptedJson = await decryptProjectData(content);
+              const parsed = JSON.parse(decryptedJson);
+              dispatch({ type: 'LOAD_PROJECT', payload: parsed });
+              
+              // Set the file path so the title shows the project name
+              console.log('[Drag&Drop] Setting file path:', droppedProjectFile);
+              if (window && (window as any).process && (window as any).process.type === 'renderer') {
+                const { ipcRenderer } = (window as any).require('electron');
+                await ipcRenderer.invoke('set-current-project-path', droppedProjectFile);
+                console.log('[Drag&Drop] File path set in main process');
+                // Also send event to Header to update currentFilePath state
+                window.dispatchEvent(new CustomEvent('project-file-path-changed', { detail: droppedProjectFile }));
+                console.log('[Drag&Drop] Custom event dispatched:', droppedProjectFile);
+              }
+              
+              // Show success toast
+              showToast(t('toast.projectOpened'), 'success');
+              
+              setDroppedProjectFile(null);
+            } catch (err) {
+              console.error('Failed to load dropped project:', err);
+              showToast(t('toast.openFailed'), 'error');
+              setDroppedProjectFile(null);
+            }
           }}
           onClose={() => setDroppedProjectFile(null)}
+          isDestructive={false}
+        />
+      )}
+      
+      {pendingProjectData && (
+        <ConfirmModal
+          isOpen={true}
+          title={state.language === 'ku' ? 'کردنەوەی پرۆژە' : 'Load Project'}
+          message={state.language === 'ku' ? 'ئایا دەتەوێت ئەم پرۆژەیە بکەیتەوە؟ گۆڕانکارییەکانی سەیڤ نەکراو لەدەست دەچێت.' : 'Do you want to load this project? Your current unsaved changes will be lost.'}
+          confirmLabel={state.language === 'ku' ? 'کردنەوە' : 'Load Project'}
+          cancelLabel={state.language === 'ku' ? 'پاشگەزبوونەوە' : 'Cancel'}
+          onConfirm={async () => {
+            try {
+              const decryptedJson = await decryptProjectData(pendingProjectData.content);
+              const parsed = JSON.parse(decryptedJson);
+              dispatch({ type: 'LOAD_PROJECT', payload: parsed });
+              
+              // Set the file path so the title shows the project name
+              if (pendingProjectData.filePath && window && (window as any).process && (window as any).process.type === 'renderer') {
+                const { ipcRenderer } = (window as any).require('electron');
+                ipcRenderer.invoke('set-current-project-path', pendingProjectData.filePath);
+                // Also send event to Header to update currentFilePath state
+                window.dispatchEvent(new CustomEvent('project-file-path-changed', { detail: pendingProjectData.filePath }));
+              }
+              
+              // Show success toast
+              showToast(t('toast.projectOpened'), 'success');
+              
+              setPendingProjectData(null);
+            } catch (err) {
+              console.error("Failed to load project:", err);
+              showToast(t('toast.openFailed'), 'error');
+              setPendingProjectData(null);
+            }
+          }}
+          onClose={() => setPendingProjectData(null)}
           isDestructive={false}
         />
       )}
