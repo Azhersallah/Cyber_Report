@@ -404,6 +404,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
 
         // Update global layout (pages without page-specific overrides will inherit this)
         dispatch({ type: 'SET_LAYOUT', payload: newLayout });
+
+        // If a specific page is selected, clear its page-specific override so it inherits this new layout
+        if (state.selectedPageIndex !== null) {
+            dispatch({ type: 'SET_PAGE_LAYOUT', payload: { pageIndex: state.selectedPageIndex, layout: undefined } });
+        }
     };
 
     const getLayoutButtonData = (layout: typeof LAYOUTS[0]) => {

@@ -110,7 +110,7 @@
     "publish": {
       "provider": "github",
       "owner": "Azhersallah",
-      "repo": "Cyber_Report",
+      "repo": "Photo-Printer-Free",
       "private": false
     },
     "win": {

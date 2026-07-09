@@ -1559,6 +1559,13 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                                                         const newCols = parseInt(e.target.value);
                                                         onChangeLayout(`custom_${newCols}_${customPageRows}`);
                                                     }}
+                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                    onMouseUp={(e) => e.stopPropagation()}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                    onPointerUp={(e) => e.stopPropagation()}
+                                                    onSelectStart={(e) => e.preventDefault()}
+                                                    onDragStart={(e) => e.preventDefault()}
                                                     className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
                                                 />
                                             </div>
@@ -1578,6 +1585,13 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                                                         const newRows = parseInt(e.target.value);
                                                         onChangeLayout(`custom_${customPageCols}_${newRows}`);
                                                     }}
+                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                    onMouseUp={(e) => e.stopPropagation()}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                    onPointerUp={(e) => e.stopPropagation()}
+                                                    onSelectStart={(e) => e.preventDefault()}
+                                                    onDragStart={(e) => e.preventDefault()}
                                                     className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
                                                 />
                                             </div>

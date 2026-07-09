@@ -803,7 +803,15 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
     case 'SET_LAYOUT':
       return { ...state, globalLayout: action.payload };
-    case 'SET_PAGE_LAYOUT':
+    case 'SET_PAGE_LAYOUT': {
+      if (action.payload.layout === undefined) {
+        const newPageLayouts = { ...state.pageLayouts };
+        delete newPageLayouts[action.payload.pageIndex];
+        return {
+          ...state,
+          pageLayouts: newPageLayouts
+        };
+      }
       return {
         ...state,
         pageLayouts: {
@@ -811,6 +819,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
           [action.payload.pageIndex]: action.payload.layout
         }
       };
+    }
     case 'CLEAR_ALL_PAGE_LAYOUTS':
       return {
         ...state,
