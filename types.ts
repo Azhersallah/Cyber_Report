@@ -377,11 +377,11 @@ export interface StampData {
 
 export const INITIAL_SETTINGS: AppSettings = {
   userName: 'User Name',
-  logo: './favicon.svg',
+  logo: null,
   logoScale: 1.0, // Default scale 100%
   badgeColor: '#3b82f6',
   showTitle: true,
-  showLogo: true,
+  showLogo: false,
   showPageNumber: true,
   startPageNumber: 1, // Default start from page 1
   showDateUser: true,
