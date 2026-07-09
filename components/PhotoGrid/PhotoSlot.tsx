@@ -88,6 +88,7 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   const { settings } = state;
   const [isHovered, setIsHovered] = useState(false);
   const [isToolbarHovered, setIsToolbarHovered] = useState(false);
+  const [slotWidth, setSlotWidth] = useState<number | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDraggingOverlay, setIsDraggingOverlay] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
@@ -97,6 +98,28 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const insertInputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+      if (!containerRef.current) return;
+      
+      const updateWidth = () => {
+          if (containerRef.current) {
+              setSlotWidth(containerRef.current.clientWidth);
+          }
+      };
+      
+      updateWidth();
+      
+      const observer = new ResizeObserver(() => {
+          updateWidth();
+      });
+      observer.observe(containerRef.current);
+      
+      return () => {
+          observer.disconnect();
+      };
+  }, []);
 
   const isBusinessCardSlot = state.mode === 'businesscard';
   const isMultiCopySlot = isIdPhotoSlot || isBusinessCardSlot;
@@ -149,7 +172,7 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
       : 'Select an existing photo from the page or upload a new one';
   };
 
-  const containerRef = useRef<HTMLDivElement>(null);
+
 
   // Handle rounding logic - use square borders if requested by parent
   const isRoundedNone = className.includes('rounded-none');
@@ -627,49 +650,81 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
           )}
       </div>
 
-      {photo && (
-        <div 
-            onMouseEnter={() => setIsToolbarHovered(true)}
-            onMouseLeave={() => setIsToolbarHovered(false)}
-            className={cn(
-                "absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 bg-background/95 dark:bg-zinc-950/95 backdrop-blur-md border border-border dark:border-zinc-800 rounded-xl shadow-lg shadow-black/10 transition-all transform z-[100] no-print",
-                (isHovered || isToolbarHovered) ? "translate-y-0 opacity-100 scale-100" : "translate-y-2 opacity-0 scale-95 pointer-events-none"
-            )}
-        >
-            {!isIdPhotoSlot && (
-                <>
-                    <button onClick={handleRotate} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={t('slot.rotate')}>
-                    <RotateCw size={14} />
-                    </button>
-                    <button onClick={() => onEdit(photo)} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={t('slot.edit')}>
-                    <Edit2 size={14} />
-                    </button>
-                    <button onClick={handleReplaceClick} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={t('slot.replace')}>
-                    <ImageUp size={14} />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
-                    <Download size={14} />
-                    </button>
-                    <button onClick={handleRemove} className="p-1.5 hover:bg-destructive/10 dark:hover:bg-red-500/20 rounded-lg text-muted-foreground dark:text-zinc-400 hover:text-destructive dark:hover:text-red-400 transition-colors duration-150" title={t('slot.remove')}>
-                    <X size={14} />
-                    </button>
-                </>
-            )}
-            {isIdPhotoSlot && (
-                <>
-                    <button onClick={() => onEdit(photo)} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={t('slot.edit')}>
-                    <Edit2 size={14} />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
-                    <Download size={14} />
-                    </button>
-                    <button onClick={handleRemove} className="p-1.5 hover:bg-destructive/10 dark:hover:bg-red-500/20 rounded-lg text-muted-foreground dark:text-zinc-400 hover:text-destructive dark:hover:text-red-400 transition-colors duration-150" title={t('slot.remove')}>
-                    <X size={14} />
-                    </button>
-                </>
-            )}
-        </div>
-      )}
+      {photo && (() => {
+        let btnPadding = "p-1.5";
+        let iconSize = 14;
+        let gapClass = "gap-1";
+        let toolbarPadding = "p-1";
+        let showAllButtons = !slotWidth || slotWidth >= 110;
+
+        if (slotWidth && slotWidth < 70) {
+            btnPadding = "p-0.5";
+            iconSize = 10;
+            gapClass = "gap-0.5";
+            toolbarPadding = "p-0.5";
+        } else if (slotWidth && slotWidth < 110) {
+            btnPadding = "p-1";
+            iconSize = 12;
+            gapClass = "gap-0.5";
+            toolbarPadding = "p-1";
+        }
+
+        const showToolbar = isHovered || isToolbarHovered;
+
+        return (
+            <div 
+                onMouseEnter={() => setIsToolbarHovered(true)}
+                onMouseLeave={() => setIsToolbarHovered(false)}
+                className={cn(
+                    "absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center bg-background/95 dark:bg-zinc-950/95 backdrop-blur-md border border-border dark:border-zinc-800 rounded-xl shadow-lg shadow-black/10 transition-all transform z-[100] no-print",
+                    gapClass,
+                    toolbarPadding,
+                    showToolbar ? "translate-y-0 opacity-100 scale-100" : "translate-y-2 opacity-0 scale-95 pointer-events-none"
+                )}
+            >
+                {!isIdPhotoSlot && (
+                    <>
+                        {showAllButtons && (
+                            <button onClick={handleRotate} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={t('slot.rotate')}>
+                                <RotateCw size={iconSize} />
+                            </button>
+                        )}
+                        <button onClick={() => onEdit(photo)} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={t('slot.edit')}>
+                            <Edit2 size={iconSize} />
+                        </button>
+                        {showAllButtons && (
+                            <button onClick={handleReplaceClick} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={t('slot.replace')}>
+                                <ImageUp size={iconSize} />
+                            </button>
+                        )}
+                        {showAllButtons && (
+                            <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
+                                <Download size={iconSize} />
+                            </button>
+                        )}
+                        <button onClick={handleRemove} className={cn("hover:bg-destructive/10 dark:hover:bg-red-500/20 rounded-lg text-muted-foreground dark:text-zinc-400 hover:text-destructive dark:hover:text-red-400 transition-colors duration-150", btnPadding)} title={t('slot.remove')}>
+                            <X size={iconSize} />
+                        </button>
+                    </>
+                )}
+                {isIdPhotoSlot && (
+                    <>
+                        <button onClick={() => onEdit(photo)} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={t('slot.edit')}>
+                            <Edit2 size={iconSize} />
+                        </button>
+                        {showAllButtons && (
+                            <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
+                                <Download size={iconSize} />
+                            </button>
+                        )}
+                        <button onClick={handleRemove} className={cn("hover:bg-destructive/10 dark:hover:bg-red-500/20 rounded-lg text-muted-foreground dark:text-zinc-400 hover:text-destructive dark:hover:text-red-400 transition-colors duration-150", btnPadding)} title={t('slot.remove')}>
+                            <X size={iconSize} />
+                        </button>
+                    </>
+                )}
+            </div>
+        );
+      })()}
 
       {photo && (
           <div className="absolute top-2 right-2 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing no-print z-[100]">
