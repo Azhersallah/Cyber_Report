@@ -360,9 +360,14 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
   };
 
   const getGridStyle = (): React.CSSProperties => {
-    if (layout === 'custom') {
-      const cols = settings.customCols || 2;
-      const rows = settings.customRows || 3;
+    if (layout.startsWith('custom')) {
+      let cols = settings.customCols || 2;
+      let rows = settings.customRows || 3;
+      if (layout.startsWith('custom_')) {
+          const parts = layout.split('_');
+          cols = parseInt(parts[1]) || 2;
+          rows = parseInt(parts[2]) || 3;
+      }
       return {
         display: 'grid',
         gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
@@ -476,6 +481,15 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
               isToggle: true
           };
       }
+      if (btnLayoutId === 'custom') {
+          const isActive = layout.startsWith('custom');
+          return {
+              isActive,
+              previewType: 'custom',
+              label: 'layout.custom',
+              isToggle: false
+          };
+      }
       if (btnLayoutId === 'businesscard') {
           const isGrid = layout === 'businesscard';
           const isForm = layout === 'businesscard-form';
@@ -519,11 +533,25 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
           if (layout === '2text1') target = '2text1-side';
           else if (layout === '2text1-side') target = '2text1';
           else target = '2text1';
+      } else if (btnLayoutId === 'custom') {
+          let c = 2;
+          let r = 3;
+          if (layout.startsWith('custom_')) {
+              const parts = layout.split('_');
+              c = parseInt(parts[1]) || 2;
+              r = parseInt(parts[2]) || 3;
+          } else {
+              c = state.settings.customCols || 2;
+              r = state.settings.customRows || 3;
+          }
+          target = `custom_${c}_${r}`;
       } else if (btnLayoutId.startsWith('businesscard')) {
           target = btnLayoutId;
       }
       onChangeLayout(target as LayoutType);
-      setShowLayoutMenu(false);
+      if (btnLayoutId !== 'custom') {
+          setShowLayoutMenu(false);
+      }
   };
 
   const renderContent = () => {
@@ -1363,17 +1391,26 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                 onSwap={handleSwapPhotos}
              />
         ))}
-        {layout === 'custom' && Array((settings.customCols || 2) * (settings.customRows || 3)).fill(null).map((_, i) => (
-             <PhotoSlot 
-                key={i} index={i} slotId={i.toString()} 
-                photo={photos[i]} 
-                badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
-                onEdit={onEditPhoto} 
-                onInsert={(p) => handleInsertPhoto(i, p)}
-                globalIndex={startIndex + i}
-                onSwap={handleSwapPhotos}
-             />
-        ))}
+        {layout.startsWith('custom') && (() => {
+            let cols = settings.customCols || 2;
+            let rows = settings.customRows || 3;
+            if (layout.startsWith('custom_')) {
+                const parts = layout.split('_');
+                cols = parseInt(parts[1]) || 2;
+                rows = parseInt(parts[2]) || 3;
+            }
+            return Array(cols * rows).fill(null).map((_, i) => (
+                 <PhotoSlot 
+                    key={i} index={i} slotId={i.toString()} 
+                    photo={photos[i]} 
+                    badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
+                    onEdit={onEditPhoto} 
+                    onInsert={(p) => handleInsertPhoto(i, p)}
+                    globalIndex={startIndex + i}
+                    onSwap={handleSwapPhotos}
+                 />
+            ));
+        })()}
       </div>
     );
   };
@@ -1434,141 +1471,163 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
               </Button>
             )}
             
-            {showLayoutMenu && state.mode === 'photos' && (
-                <div 
-                  ref={menuRef}
-                  className="absolute top-full right-0 mt-2 rounded-xl shadow-xl border p-3 grid grid-cols-3 gap-3 w-72 z-50 animate-fade-in"
-                  style={{ backgroundColor: '#ffffff', borderColor: '#e4e4e7' }}
-                >
-                    {LAYOUTS.filter(l => !['2col', '3col', '3row', '1text-side', '2text1-side', 'businesscard', 'businesscard-form', 'businesscard-form-reverse', 'invoice', 'invoice-1', 'invoice-4', 'idphoto', 'idphoto-1', 'idphoto-2', 'idphoto-4'].includes(l.id)).map(l => {
-                        const { isActive, previewType, label, isToggle } = getLayoutButtonData(l.id);
-                        
-                        if (l.id === 'custom') {
-                            return (
-                                <div 
-                                  key={l.id} 
-                                  className={cn(
-                                    "col-span-3 p-3 rounded-xl border flex flex-col gap-2.5 transition-all duration-300 relative overflow-hidden",
-                                    isActive 
-                                      ? 'border-[#18181b] bg-zinc-50' 
-                                      : 'border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50/50'
-                                  )}
-                                  style={{ color: '#18181b' }}
-                                >
-                                    {/* Button Header Section */}
+            {showLayoutMenu && state.mode === 'photos' && (() => {
+                const activeLayout = state.pageLayouts[pageIndex] || state.globalLayout;
+                let customPageCols = 2;
+                let customPageRows = 3;
+                if (activeLayout.startsWith('custom_')) {
+                    const parts = activeLayout.split('_');
+                    customPageCols = parseInt(parts[1]) || 2;
+                    customPageRows = parseInt(parts[2]) || 3;
+                } else {
+                    customPageCols = state.settings.customCols || 2;
+                    customPageRows = state.settings.customRows || 3;
+                }
+
+                return (
+                    <div 
+                      ref={menuRef}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className="absolute top-full right-0 mt-2 rounded-xl shadow-xl border p-3 grid grid-cols-3 gap-3 w-72 z-[200] animate-fade-in bg-white"
+                      style={{ borderColor: '#e4e4e7' }}
+                    >
+                        {LAYOUTS.filter(l => !['2col', '3col', '3row', '1text-side', '2text1-side', 'businesscard', 'businesscard-form', 'businesscard-form-reverse', 'invoice', 'invoice-1', 'invoice-4', 'idphoto', 'idphoto-1', 'idphoto-2', 'idphoto-4'].includes(l.id)).map(l => {
+                            const { isActive, previewType, label, isToggle } = getLayoutButtonData(l.id);
+                            
+                            if (l.id === 'custom') {
+                                return (
                                     <div 
-                                      onClick={() => handleLayoutItemClick(l.id)}
-                                      className="flex items-center justify-between cursor-pointer w-full select-none"
+                                      key={l.id} 
+                                      className={cn(
+                                        "col-span-3 p-3 rounded-xl border flex flex-col gap-2.5 transition-all duration-300 relative overflow-hidden",
+                                        isActive 
+                                          ? 'border-[#18181b] bg-zinc-50' 
+                                          : 'border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50/50'
+                                      )}
+                                      style={{ color: '#18181b' }}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <LayoutPreview type={previewType} forPaper={true} />
-                                            <div className="flex flex-col text-left rtl:text-right">
-                                              <span className={cn(
-                                                "text-xs font-bold transition-colors",
-                                                isActive ? 'text-[#18181b]' : 'text-zinc-500'
-                                              )}>
-                                                {t(label)}
-                                              </span>
-                                              <span className="text-[8px] text-zinc-450 leading-none">
-                                                {state.language === 'ku' ? 'تۆڕی دەستکاری کراو' : 'Configurable grid layout'}
-                                              </span>
+                                        {/* Button Header Section */}
+                                        <div 
+                                          onClick={() => handleLayoutItemClick(l.id)}
+                                          className="flex items-center justify-between cursor-pointer w-full select-none"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <LayoutPreview type={previewType} forPaper={true} />
+                                                <div className="flex flex-col text-left rtl:text-right">
+                                                  <span className={cn(
+                                                    "text-xs font-bold transition-colors font-sans",
+                                                    isActive ? 'text-[#18181b]' : 'text-zinc-500'
+                                                  )}>
+                                                    {t(label)}
+                                                  </span>
+                                                  <span className="text-[8px] text-zinc-400 leading-none font-sans">
+                                                    {state.language === 'ku' ? 'تۆڕی دەستکاری کراو' : 'Configurable grid layout'}
+                                                  </span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className={cn(
+                                                "w-4 h-4 rounded-full border flex items-center justify-center transition-all",
+                                                isActive 
+                                                  ? "bg-[#18181b] border-[#18181b] text-white" 
+                                                  : "border-zinc-300 text-transparent"
+                                            )}>
+                                                <Check size={8} strokeWidth={3} />
                                             </div>
                                         </div>
                                         
+                                        {/* Sliders Container (Disabled when layout is not selected) */}
                                         <div className={cn(
-                                            "w-4 h-4 rounded-full border flex items-center justify-center transition-all",
-                                            isActive 
-                                              ? "bg-[#18181b] border-[#18181b] text-white" 
-                                              : "border-zinc-300 text-transparent"
-                                        )}>
-                                            <Check size={8} strokeWidth={3} />
+                                            "grid grid-cols-2 gap-3 pt-2 border-t border-dashed border-zinc-200 transition-all duration-300",
+                                            isActive ? "opacity-100" : "opacity-40 pointer-events-none select-none"
+                                          )}
+                                        >
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-[9px] font-semibold text-zinc-500 uppercase tracking-wide font-sans">
+                                                    <span>{t('settings.customCols')}</span>
+                                                    <span className="font-bold text-zinc-800 bg-zinc-100 px-1.5 py-0.5 rounded text-[8px]">{customPageCols}</span>
+                                                </div>
+                                                <input 
+                                                    type="range" 
+                                                    min={1} 
+                                                    max={6} 
+                                                    step={1}
+                                                    disabled={!isActive}
+                                                    value={customPageCols} 
+                                                    onChange={(e) => {
+                                                        const newCols = parseInt(e.target.value);
+                                                        onChangeLayout(`custom_${newCols}_${customPageRows}`);
+                                                    }}
+                                                    className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-[9px] font-semibold text-zinc-500 uppercase tracking-wide font-sans">
+                                                    <span>{t('settings.customRows')}</span>
+                                                    <span className="font-bold text-zinc-800 bg-zinc-100 px-1.5 py-0.5 rounded text-[8px]">{customPageRows}</span>
+                                                </div>
+                                                <input 
+                                                    type="range" 
+                                                    min={1} 
+                                                    max={6} 
+                                                    step={1}
+                                                    disabled={!isActive}
+                                                    value={customPageRows} 
+                                                    onChange={(e) => {
+                                                        const newRows = parseInt(e.target.value);
+                                                        onChangeLayout(`custom_${customPageCols}_${newRows}`);
+                                                    }}
+                                                    className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                    
-                                    {/* Sliders Container (Disabled when layout is not selected) */}
-                                    <div className={cn(
-                                        "grid grid-cols-2 gap-3 pt-2 border-t border-dashed border-zinc-200 transition-all duration-300",
-                                        isActive ? "opacity-100" : "opacity-40 pointer-events-none select-none"
-                                      )}
-                                    >
-                                        <div className="space-y-1">
-                                            <div className="flex justify-between items-center text-[9px] font-semibold text-zinc-500 uppercase tracking-wide">
-                                                <span>{t('settings.customCols')}</span>
-                                                <span className="font-bold text-zinc-800 bg-zinc-100 px-1.5 py-0.5 rounded text-[8px]">{state.settings.customCols || 2}</span>
-                                            </div>
-                                            <input 
-                                                type="range" 
-                                                min={1} 
-                                                max={6} 
-                                                step={1}
-                                                disabled={!isActive}
-                                                value={state.settings.customCols || 2} 
-                                                onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', payload: { customCols: parseInt(e.target.value) } })}
-                                                className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <div className="flex justify-between items-center text-[9px] font-semibold text-zinc-500 uppercase tracking-wide">
-                                                <span>{t('settings.customRows')}</span>
-                                                <span className="font-bold text-zinc-800 bg-zinc-100 px-1.5 py-0.5 rounded text-[8px]">{state.settings.customRows || 3}</span>
-                                            </div>
-                                            <input 
-                                                type="range" 
-                                                min={1} 
-                                                max={6} 
-                                                step={1}
-                                                disabled={!isActive}
-                                                value={state.settings.customRows || 3} 
-                                                onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', payload: { customRows: parseInt(e.target.value) } })}
-                                                className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        }
+                                );
+                            }
 
-                        return (
-                            <button
-                                key={l.id}
-                                onClick={() => handleLayoutItemClick(l.id)}
-                                className={cn(
-                                    "relative flex flex-col items-center gap-2 p-2 rounded-xl border-2 transition-all group"
-                                )}
-                                style={{ 
-                                    color: '#18181b',
-                                    borderColor: isActive ? '#18181b' : 'transparent',
-                                    backgroundColor: isActive ? 'rgba(24,24,27,0.05)' : 'transparent'
-                                }}
-                                title={t(label)}
-                            >
-                                <LayoutPreview type={previewType} forPaper={true} />
-                                <span 
-                                    className="text-[10px] font-medium text-center leading-tight"
-                                    style={{ color: isActive ? '#18181b' : '#71717a' }}
+                            return (
+                                <button
+                                    key={l.id}
+                                    onClick={() => handleLayoutItemClick(l.id)}
+                                    className={cn(
+                                        "relative flex flex-col items-center gap-2 p-2 rounded-xl border-2 transition-all group"
+                                    )}
+                                    style={{ 
+                                        color: '#18181b',
+                                        borderColor: isActive ? '#18181b' : 'transparent',
+                                        backgroundColor: isActive ? 'rgba(24,24,27,0.05)' : 'transparent'
+                                    }}
+                                    title={t(label)}
                                 >
-                                    {t(label)}
-                                </span>
+                                    <LayoutPreview type={previewType} forPaper={true} />
+                                    <span 
+                                        className="text-[10px] font-medium text-center leading-tight font-sans"
+                                        style={{ color: isActive ? '#18181b' : '#71717a' }}
+                                    >
+                                        {t(label)}
+                                    </span>
 
-                                {isActive && (
-                                  <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center border-2 shadow-sm z-20" style={{ backgroundColor: '#18181b', borderColor: '#ffffff' }}>
-                                      <Check size={10} className="text-white" strokeWidth={4} />
-                                  </div>
-                                )}
+                                    {isActive && (
+                                      <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center border-2 shadow-sm z-20" style={{ backgroundColor: '#18181b', borderColor: '#ffffff' }}>
+                                          <Check size={10} className="text-white" strokeWidth={4} />
+                                      </div>
+                                    )}
 
-                                {isToggle && (
-                                  <div 
-                                      className="absolute top-1 right-1 flex items-center justify-center w-5 h-5 rounded-full transition-colors z-10"
-                                      style={{ backgroundColor: isActive ? 'rgba(24,24,27,0.2)' : '#f4f4f5', color: isActive ? '#18181b' : '#71717a' }}
-                                  >
-                                      <ArrowLeftRight size={10} />
-                                  </div>
-                                )}
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
+                                    {isToggle && (
+                                      <div 
+                                          className="absolute top-1 right-1 flex items-center justify-center w-5 h-5 rounded-full transition-colors z-10"
+                                          style={{ backgroundColor: isActive ? 'rgba(24,24,27,0.2)' : '#f4f4f5', color: isActive ? '#18181b' : '#71717a' }}
+                                      >
+                                          <ArrowLeftRight size={10} />
+                                      </div>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                );
+            })()}
 
             {showLayoutMenu && state.mode === 'businesscard' && (
                 <div 

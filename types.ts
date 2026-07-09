@@ -1,5 +1,5 @@
 
-export type LayoutType = '1' | '2' | '2col' | '3col' | '3row' | '3grid' | '4' | '8' | '9' | 'custom' | '2text' | '2text1' | '1text' | '1text-side' | 'onlytext' | 'businesscard' | 'businesscard-form' | 'businesscard-form-reverse' | 'invoice' | 'invoice-1' | 'invoice-4' | 'idphoto' | 'idphoto-1' | 'idphoto-2' | 'idphoto-4';
+export type LayoutType = '1' | '2' | '2col' | '3col' | '3row' | '3grid' | '4' | '8' | '9' | 'custom' | '2text' | '2text1' | '1text' | '1text-side' | 'onlytext' | 'businesscard' | 'businesscard-form' | 'businesscard-form-reverse' | 'invoice' | 'invoice-1' | 'invoice-4' | 'idphoto' | 'idphoto-1' | 'idphoto-2' | 'idphoto-4' | string;
 
 export type AppMode = 'photos' | 'businesscard' | 'invoice' | 'idphoto' | 'resume' | 'envelope' | 'qrcode' | 'tasks' | 'stickers' | 'stamp';
 

@@ -402,11 +402,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
         else if (id === '1text') newLayout = currentActiveLayout === '1text' ? '1text-side' : '1text';
         else if (id === '2text1') newLayout = currentActiveLayout === '2text1' ? '2text1-side' : '2text1';
 
-        // Apply to all pages: Update global layout and clear all page-specific layouts
+        // Update global layout (pages without page-specific overrides will inherit this)
         dispatch({ type: 'SET_LAYOUT', payload: newLayout });
-        
-        // Clear all page-specific layouts so they all use the new global layout
-        dispatch({ type: 'CLEAR_ALL_PAGE_LAYOUTS' });
     };
 
     const getLayoutButtonData = (layout: typeof LAYOUTS[0]) => {

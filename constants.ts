@@ -27,7 +27,13 @@ export const LAYOUTS: { id: LayoutType; label: string; capacity: number }[] = [
 ];
 
 export function getLayoutCapacity(layoutId: string, settings?: { customCols?: number; customRows?: number }): number {
-  if (layoutId === 'custom') {
+  if (layoutId.startsWith('custom')) {
+    if (layoutId.startsWith('custom_')) {
+      const parts = layoutId.split('_');
+      const cols = parseInt(parts[1]) || 2;
+      const rows = parseInt(parts[2]) || 3;
+      return cols * rows;
+    }
     const cols = settings?.customCols || 2;
     const rows = settings?.customRows || 3;
     return cols * rows;
