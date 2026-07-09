@@ -13,32 +13,41 @@ const DropZone: React.FC = () => {
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
+    const validFiles = Array.from(files).filter(file => file.type.startsWith('image/') || /\.(heic|heif)$/i.test(file.name));
+    if (validFiles.length === 0) return;
+
+    // Dispatch start event
+    window.dispatchEvent(new CustomEvent('image-import-start', { detail: { total: validFiles.length } }));
+
     const newPhotos: Photo[] = [];
     const errors: string[] = [];
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.type.startsWith('image/') || /\.(heic|heif)$/i.test(file.name)) {
-        try {
-          const src = await readFileAsDataURL(file);
-          newPhotos.push({
-            id: generateId(),
-            name: file.name,
-            src,
-            rotation: 0,
-            annotations: []
-          });
-        } catch (err) {
-          console.error("Failed to load image", err);
-          errors.push(file.name);
-        }
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      try {
+        const src = await readFileAsDataURL(file);
+        newPhotos.push({
+          id: generateId(),
+          name: file.name,
+          src,
+          rotation: 0,
+          annotations: []
+        });
+      } catch (err) {
+        console.error("Failed to load image", err);
+        errors.push(file.name);
       }
+      // Dispatch progress event
+      window.dispatchEvent(new CustomEvent('image-import-progress', { detail: { current: i + 1 } }));
     }
     
     if (newPhotos.length > 0) {
       dispatch({ type: 'ADD_PHOTOS', payload: newPhotos });
     }
     
+    // Dispatch end event
+    window.dispatchEvent(new CustomEvent('image-import-end'));
+
     // Show error for failed files
     if (errors.length > 0) {
       alert(`Failed to load: ${errors.join(', ')}\n\nHEIC files may take a moment to convert.`);

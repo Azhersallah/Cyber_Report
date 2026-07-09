@@ -14,7 +14,7 @@ import SetupWizardModal from './components/Modals/SetupWizardModal';
 import { Photo, LayoutType, AppState } from './types';
 import { LAYOUTS, getLayoutCapacity } from './constants';
 import { getTranslation } from './utils/translations';
-import { Plus, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { Plus, ZoomIn, ZoomOut, Maximize, Image } from 'lucide-react';
 import { decryptProjectData } from './utils/encryption';
 import { cn } from './lib/utils';
 import { ToastProvider, useToast } from './components/ui/toast';
@@ -102,7 +102,32 @@ const MainContent: React.FC = () => {
   const [pendingProjectData, setPendingProjectData] = useState<{content: string; filePath?: string} | null>(null);
   const [newlyAddedPageIndex, setNewlyAddedPageIndex] = useState<number | null>(null);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const t = (key: string) => getTranslation(key, state.language);
+
+  useEffect(() => {
+    const handleStart = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setImportProgress({ current: 0, total: detail.total });
+    };
+    const handleProgress = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setImportProgress(prev => prev ? { ...prev, current: detail.current } : null);
+    };
+    const handleEnd = () => {
+      setImportProgress(null);
+    };
+
+    window.addEventListener('image-import-start', handleStart);
+    window.addEventListener('image-import-progress', handleProgress);
+    window.addEventListener('image-import-end', handleEnd);
+
+    return () => {
+      window.removeEventListener('image-import-start', handleStart);
+      window.removeEventListener('image-import-progress', handleProgress);
+      window.removeEventListener('image-import-end', handleEnd);
+    };
+  }, []);
 
   useEffect(() => {
     const isSetupCompleted = localStorage.getItem('photoPrinterSetupCompleted') === 'true';
@@ -262,7 +287,11 @@ const MainContent: React.FC = () => {
             const { readFileAsDataURL, generateId } = await import('./utils/helpers');
             const newPhotos: Photo[] = [];
 
-            for (const f of imageFiles) {
+            // Dispatch start event
+            window.dispatchEvent(new CustomEvent('image-import-start', { detail: { total: imageFiles.length } }));
+
+            for (let i = 0; i < imageFiles.length; i++) {
+              const f = imageFiles[i];
               try {
                 const src = await readFileAsDataURL(f);
                 newPhotos.push({
@@ -275,6 +304,8 @@ const MainContent: React.FC = () => {
               } catch (err) {
                 console.error("Failed to load dropped image", err);
               }
+              // Dispatch progress event
+              window.dispatchEvent(new CustomEvent('image-import-progress', { detail: { current: i + 1 } }));
             }
 
             if (newPhotos.length > 0) {
@@ -282,6 +313,9 @@ const MainContent: React.FC = () => {
             }
           } catch (err) {
             console.error("Failed to load helpers module", err);
+          } finally {
+            // Dispatch end event
+            window.dispatchEvent(new CustomEvent('image-import-end'));
           }
         }
       }
@@ -864,6 +898,41 @@ const MainContent: React.FC = () => {
 
       {showSetupWizard && (
         <SetupWizardModal onClose={() => setShowSetupWizard(false)} />
+      )}
+
+      {importProgress && (
+        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in ${state.language === 'ku' ? 'font-kufi' : 'font-sans'}`} dir={state.language === 'ku' ? 'rtl' : 'ltr'}>
+          <Card className="w-full max-w-sm p-6 bg-card border border-border shadow-xl rounded-xl animate-slide-up space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0 animate-pulse">
+                <Image size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-foreground truncate">
+                  {state.language === 'ku' ? 'بارکردنی وێنەکان...' : 'Importing Images...'}
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {state.language === 'ku' 
+                    ? 'تکایە چاوەڕێ بکە تا وێنەکان ڕێکدەخرێن' 
+                    : 'Please wait while images are being processed'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="w-full h-2 rounded-full bg-muted overflow-hidden relative border border-border/20">
+                <div 
+                  className="h-full bg-primary rounded-full transition-all duration-300 ease-out" 
+                  style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span>{Math.round((importProgress.current / importProgress.total) * 100)}%</span>
+                <span>{importProgress.current} / {importProgress.total}</span>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

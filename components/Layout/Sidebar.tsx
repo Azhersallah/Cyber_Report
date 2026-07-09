@@ -377,19 +377,33 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
 
         const files = e.target.files;
         if (!files || files.length === 0) return;
-        const newPhotos: Photo[] = [];
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            if (file.type.startsWith('image/') || /\.(heic|heif)$/i.test(file.name)) {
-                try {
-                    const src = await readFileAsDataURL(file);
-                    newPhotos.push({ id: generateId(), name: file.name, src, rotation: 0, annotations: [] });
-                } catch (err) { console.error("Failed to load image", err); }
-            }
+
+        const validFiles = Array.from(files).filter(file => file.type.startsWith('image/') || /\.(heic|heif)$/i.test(file.name));
+        if (validFiles.length === 0) {
+            e.target.value = '';
+            return;
         }
+
+        // Dispatch start event
+        window.dispatchEvent(new CustomEvent('image-import-start', { detail: { total: validFiles.length } }));
+
+        const newPhotos: Photo[] = [];
+        for (let i = 0; i < validFiles.length; i++) {
+            const file = validFiles[i];
+            try {
+                const src = await readFileAsDataURL(file);
+                newPhotos.push({ id: generateId(), name: file.name, src, rotation: 0, annotations: [] });
+            } catch (err) { console.error("Failed to load image", err); }
+            // Dispatch progress event
+            window.dispatchEvent(new CustomEvent('image-import-progress', { detail: { current: i + 1 } }));
+        }
+
         if (newPhotos.length > 0) {
             dispatch({ type: 'ADD_PHOTOS', payload: newPhotos });
         }
+
+        // Dispatch end event
+        window.dispatchEvent(new CustomEvent('image-import-end'));
         e.target.value = '';
     };
 
