@@ -11,6 +11,7 @@ import TextFormattingToolbar from './components/Editor/TextFormattingToolbar';
 import PrintModal from './components/Modals/PrintModal';
 import ConfirmModal from './components/Modals/ConfirmModal';
 import SetupWizardModal from './components/Modals/SetupWizardModal';
+import { Card } from './components/ui/card';
 import { Photo, LayoutType, AppState } from './types';
 import { LAYOUTS, getLayoutCapacity } from './constants';
 import { getTranslation } from './utils/translations';
@@ -103,19 +104,22 @@ const MainContent: React.FC = () => {
   const [newlyAddedPageIndex, setNewlyAddedPageIndex] = useState<number | null>(null);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
+  const importTotalRef = useRef(0);
   const t = (key: string) => getTranslation(key, state.language);
 
   useEffect(() => {
     const handleStart = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      importTotalRef.current = detail.total;
       setImportProgress({ current: 0, total: detail.total });
     };
     const handleProgress = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      setImportProgress(prev => prev ? { ...prev, current: detail.current } : null);
+      setImportProgress({ current: detail.current, total: importTotalRef.current });
     };
     const handleEnd = () => {
       setImportProgress(null);
+      importTotalRef.current = 0;
     };
 
     window.addEventListener('image-import-start', handleStart);
