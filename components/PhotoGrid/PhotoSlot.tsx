@@ -680,9 +680,8 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
         let iconSize = 14;
         let gapClass = "gap-1";
         let toolbarPadding = "p-1";
-        let showAllButtons = !slotWidth || slotWidth >= 140;
 
-        if (slotWidth && slotWidth < 80) {
+        if (slotWidth && slotWidth < 75) {
             btnPadding = "p-0.5";
             iconSize = 10;
             gapClass = "gap-0.5";
@@ -693,6 +692,10 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
             gapClass = "gap-0.5";
             toolbarPadding = "p-1";
         }
+
+        const showRotate = !slotWidth || slotWidth >= 75;
+        const showReplace = !slotWidth || slotWidth >= 75;
+        const showSave = !slotWidth || slotWidth >= 140;
 
         return (
             <div 
@@ -707,7 +710,7 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
             >
                 {!isIdPhotoSlot && (
                     <>
-                        {showAllButtons && (
+                        {showRotate && (
                             <button onClick={handleRotate} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={t('slot.rotate')}>
                                 <RotateCw size={iconSize} />
                             </button>
@@ -715,12 +718,12 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
                         <button onClick={() => onEdit(photo)} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={t('slot.edit')}>
                             <Edit2 size={iconSize} />
                         </button>
-                        {showAllButtons && (
+                        {showReplace && (
                             <button onClick={handleReplaceClick} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={t('slot.replace')}>
                                 <ImageUp size={iconSize} />
                             </button>
                         )}
-                        {showAllButtons && (
+                        {showSave && (
                             <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
                                 <Download size={iconSize} />
                             </button>
@@ -735,7 +738,7 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
                         <button onClick={() => onEdit(photo)} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={t('slot.edit')}>
                             <Edit2 size={iconSize} />
                         </button>
-                        {showAllButtons && (
+                        {showSave && (
                             <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className={cn("hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150", btnPadding)} title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
                                 <Download size={iconSize} />
                             </button>
