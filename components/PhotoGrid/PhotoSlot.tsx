@@ -88,6 +88,31 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   const { settings } = state;
   const [isHovered, setIsHovered] = useState(false);
   const [isToolbarHovered, setIsToolbarHovered] = useState(false);
+  const [showToolbar, setShowToolbar] = useState(false);
+  const hoverTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+      if (isHovered || isToolbarHovered) {
+          if (hoverTimeoutRef.current) {
+              clearTimeout(hoverTimeoutRef.current);
+              hoverTimeoutRef.current = null;
+          }
+          setShowToolbar(true);
+      } else {
+          if (!hoverTimeoutRef.current) {
+              hoverTimeoutRef.current = setTimeout(() => {
+                  setShowToolbar(false);
+                  hoverTimeoutRef.current = null;
+              }, 300);
+          }
+      }
+      return () => {
+          if (hoverTimeoutRef.current) {
+              clearTimeout(hoverTimeoutRef.current);
+          }
+      };
+  }, [isHovered, isToolbarHovered]);
+
   const [slotWidth, setSlotWidth] = useState<number | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDraggingOverlay, setIsDraggingOverlay] = useState(false);
@@ -655,21 +680,19 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
         let iconSize = 14;
         let gapClass = "gap-1";
         let toolbarPadding = "p-1";
-        let showAllButtons = !slotWidth || slotWidth >= 110;
+        let showAllButtons = !slotWidth || slotWidth >= 140;
 
-        if (slotWidth && slotWidth < 70) {
+        if (slotWidth && slotWidth < 80) {
             btnPadding = "p-0.5";
             iconSize = 10;
             gapClass = "gap-0.5";
             toolbarPadding = "p-0.5";
-        } else if (slotWidth && slotWidth < 110) {
+        } else if (slotWidth && slotWidth < 140) {
             btnPadding = "p-1";
             iconSize = 12;
             gapClass = "gap-0.5";
             toolbarPadding = "p-1";
         }
-
-        const showToolbar = isHovered || isToolbarHovered;
 
         return (
             <div 
