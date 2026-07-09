@@ -1,42 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3b82f6"/>
-      <stop offset="100%" style="stop-color:#1d4ed8"/>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#003973" />
+      <stop offset="100%" stop-color="#1058a6" />
     </linearGradient>
-    <linearGradient id="paperGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff"/>
-      <stop offset="100%" style="stop-color:#f1f5f9"/>
+
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#A5F3FC" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#001529" flood-opacity="0.4" />
+    </filter>
+
+    <linearGradient id="borderGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.0" />
     </linearGradient>
   </defs>
+
+  <rect width="512" height="512" rx="140" fill="url(#bgGradient)" />
   
-  <!-- Background rounded square -->
-  <rect x="32" y="32" width="448" height="448" rx="80" fill="url(#bgGrad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="136" fill="none" stroke="url(#borderGradient)" stroke-width="4" />
   
-  <!-- Paper/Photo coming out -->
-  <rect x="120" y="100" width="272" height="200" rx="12" fill="url(#paperGrad)" stroke="#e2e8f0" stroke-width="4"/>
-  
-  <!-- Photo placeholder inside paper -->
-  <rect x="140" y="120" width="232" height="140" rx="8" fill="#dbeafe"/>
-  
-  <!-- Mountain icon inside photo -->
-  <path d="M160 240 L220 180 L260 210 L320 150 L352 240 Z" fill="#3b82f6" opacity="0.6"/>
-  
-  <!-- Sun in photo -->
-  <circle cx="320" cy="155" r="20" fill="#fbbf24"/>
-  
-  <!-- Printer body -->
-  <rect x="80" y="280" width="352" height="140" rx="20" fill="#1e293b"/>
-  
-  <!-- Printer slot -->
-  <rect x="100" y="280" width="312" height="16" rx="4" fill="#0f172a"/>
-  
-  <!-- Printer details - buttons -->
-  <circle cx="380" cy="360" r="16" fill="#22c55e"/>
-  <circle cx="380" cy="360" r="8" fill="#16a34a"/>
-  
-  <!-- Printer paper tray indicator -->
-  <rect x="120" y="340" width="200" height="8" rx="4" fill="#334155"/>
-  <rect x="120" y="360" width="160" height="8" rx="4" fill="#334155"/>
-  <rect x="120" y="380" width="180" height="8" rx="4" fill="#334155"/>
+  <g filter="url(#softShadow)">
+    <text x="50%" y="55%" 
+          dominant-baseline="middle" 
+          text-anchor="middle" 
+          font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+          font-weight="800" 
+          letter-spacing="-4">
+      <tspan fill="url(#textGradient)" font-size="195">CY</tspan>
+      <tspan fill="#FFFFFF" font-size="185" dx="2">r</tspan>
+    </text>
+  </g>
 </svg>

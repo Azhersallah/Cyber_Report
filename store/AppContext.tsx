@@ -216,7 +216,7 @@ const initialState: AppState = {
     website: '',
     address: '',
     tagline: '',
-    logo: null,
+    logo: './favicon.svg',
     photo: null,
     social: {}
   },
@@ -241,7 +241,7 @@ const initialState: AppState = {
     bgColor: '#FFFFFF',
     includeMargin: true,
     errorLevel: 'M',
-    logoImage: null,
+    logoImage: './favicon.svg',
     logoSize: 20,
   },
   stampData: {
@@ -270,7 +270,7 @@ const initialState: AppState = {
     starCount: 2,
     distressEffect: 0,
     monochrome: false,
-    centerImage: null,
+    centerImage: './favicon.svg',
     centerImageSize: 55,
     centerLayout: 'text-bottom',
     centerImageOffsetX: 0,
@@ -971,7 +971,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
           website: '',
           address: '',
           tagline: '',
-          logo: null,
+          logo: './favicon.svg',
           photo: null,
           social: {}
         }

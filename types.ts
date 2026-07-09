@@ -1,5 +1,5 @@
 
-export type LayoutType = '1' | '2' | '2col' | '4' | '2text' | '1text' | '1text-side' | 'onlytext' | 'businesscard' | 'businesscard-form' | 'businesscard-form-reverse' | 'invoice' | 'invoice-1' | 'invoice-4' | 'idphoto' | 'idphoto-1' | 'idphoto-2' | 'idphoto-4';
+export type LayoutType = '1' | '2' | '2col' | '3col' | '3row' | '3grid' | '4' | '8' | '9' | 'custom' | '2text' | '2text1' | '1text' | '1text-side' | 'onlytext' | 'businesscard' | 'businesscard-form' | 'businesscard-form-reverse' | 'invoice' | 'invoice-1' | 'invoice-4' | 'idphoto' | 'idphoto-1' | 'idphoto-2' | 'idphoto-4';
 
 export type AppMode = 'photos' | 'businesscard' | 'invoice' | 'idphoto' | 'resume' | 'envelope' | 'qrcode' | 'tasks' | 'stickers' | 'stamp';
 
@@ -154,6 +154,8 @@ export interface AppSettings {
   idPhotoPosition2: 'top' | 'bottom' | 'left' | 'right'; // Position for 2 A6 layout
   idPhotoSlotCounts: Record<number, number>; // Per-A6 section slot count (1-12), key is section index
   idPhotoType: 'standard' | 'passport'; // standard: 2.7x3.7cm (12/A6), passport: 3.7x4.7cm (6/A6)
+  customCols?: number;
+  customRows?: number;
 }
 
 export interface AppState {
@@ -375,7 +377,7 @@ export interface StampData {
 
 export const INITIAL_SETTINGS: AppSettings = {
   userName: 'User Name',
-  logo: null,
+  logo: './favicon.svg',
   logoScale: 1.0, // Default scale 100%
   badgeColor: '#3b82f6',
   showTitle: true,
@@ -433,5 +435,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   idPhotoPosition: 'center', // Default position for single A6
   idPhotoPosition2: 'top', // Default position for 2 A6
   idPhotoSlotCounts: {}, // Per-A6 section slot counts (default 12 for all)
-  idPhotoType: 'standard' // Default to standard 2.7x3.7cm ID photo
+  idPhotoType: 'standard', // Default to standard 2.7x3.7cm ID photo
+  customCols: 2,
+  customRows: 3
 };

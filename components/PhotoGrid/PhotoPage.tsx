@@ -5,7 +5,7 @@ import PhotoSlot from './PhotoSlot';
 import { useApp, getCardSizeKey } from '../../store/AppContext';
 import { getTranslation } from '../../utils/translations';
 import { Trash2, LayoutTemplate, ArrowLeftRight, Check, Plus, Type, X, Download, RotateCcw, Grid, FileText } from 'lucide-react';
-import { LAYOUTS } from '../../constants';
+import { LAYOUTS, getLayoutCapacity } from '../../constants';
 import { LayoutPreview } from '../Layout/LayoutPreview';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
@@ -152,8 +152,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
               let currentPhotoIndex = 0;
               for (let p = 0; p < pIndex; p++) {
                   let layoutId = state.pageLayouts[p] || state.globalLayout;
-                  const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
-                  currentPhotoIndex += layoutDef.capacity;
+                  currentPhotoIndex += getLayoutCapacity(layoutId, state.settings);
               }
               return currentPhotoIndex;
           };
@@ -360,12 +359,34 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
     });
   };
 
+  const getGridStyle = (): React.CSSProperties => {
+    if (layout === 'custom') {
+      const cols = settings.customCols || 2;
+      const rows = settings.customRows || 3;
+      return {
+        display: 'grid',
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+        gap: '12px',
+        height: '100%',
+        width: '100%'
+      };
+    }
+    return {};
+  };
+
   const getGridClass = () => {
     switch (layout) {
       case '1': return 'grid-cols-1 grid-rows-1';
       case '2': return 'grid-cols-1 grid-rows-2 gap-3';
       case '2col': return 'grid-cols-2 grid-rows-1 gap-3';
+      case '3col': return 'grid-cols-3 grid-rows-1 gap-3';
+      case '3row': return 'grid-cols-1 grid-rows-3 gap-3';
+      case '3grid': return 'grid-cols-2 grid-rows-2 gap-3';
       case '4': return 'grid-cols-2 grid-rows-2 gap-3';
+      case '8': return 'grid-cols-2 grid-rows-4 gap-3';
+      case '9': return 'grid-cols-3 grid-rows-3 gap-3';
+      case 'custom': return '';
       case '1text': return 'grid-cols-1 grid-rows-[2fr_1fr] gap-3';
       case 'businesscard': return 'grid-cols-2 grid-rows-5 gap-0';
       case 'businesscard-form': return 'grid-cols-2 grid-rows-1 gap-0';
@@ -445,6 +466,16 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
               isToggle: true
           };
       }
+      if (btnLayoutId === '2text1') {
+          const isSide = layout === '2text1-side';
+          const isActive = layout === '2text1' || layout === '2text1-side';
+          return {
+              isActive,
+              previewType: isSide ? '2text1-side' : '2text1',
+              label: isSide ? 'layout.2text1-side' : 'layout.2text1',
+              isToggle: true
+          };
+      }
       if (btnLayoutId === 'businesscard') {
           const isGrid = layout === 'businesscard';
           const isForm = layout === 'businesscard-form';
@@ -484,6 +515,10 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
           if (layout === '1text') target = '1text-side';
           else if (layout === '1text-side') target = '1text';
           else target = '1text';
+      } else if (btnLayoutId === '2text1') {
+          if (layout === '2text1') target = '2text1-side';
+          else if (layout === '2text1-side') target = '2text1';
+          else target = '2text1';
       } else if (btnLayoutId.startsWith('businesscard')) {
           target = btnLayoutId;
       }
@@ -1067,6 +1102,87 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
             </div>
         );
     }
+    if (layout === '2text1') {
+        return (
+          <div className="flex flex-col h-full gap-3 min-h-0">
+             <div className="flex-1 w-full flex gap-3 min-h-0">
+                 <PhotoSlot 
+                   index={0} 
+                   slotId={`p${pageIndex}_s0`}
+                   photo={photos[0]} 
+                   badgeColor={settings.badgeColor}
+                   className="flex-1 h-full min-h-0 min-w-0 rounded-none"
+                   onEdit={onEditPhoto}
+                   onInsert={(p) => handleInsertPhoto(0, p)}
+                   globalIndex={startIndex + 0}
+                   onSwap={handleSwapPhotos}
+                 />
+                 <PhotoSlot 
+                   index={1} 
+                   slotId={`p${pageIndex}_s1`}
+                   photo={photos[1]} 
+                   badgeColor={settings.badgeColor}
+                   className="flex-1 h-full min-h-0 min-w-0 rounded-none"
+                   onEdit={onEditPhoto}
+                   onInsert={(p) => handleInsertPhoto(1, p)}
+                   globalIndex={startIndex + 1}
+                   onSwap={handleSwapPhotos}
+                 />
+             </div>
+             <EditableBlock
+                 key={`desc_0_${photos[0] ? photos[0].id : 'empty'}`}
+                 className="flex-1 transition-colors min-h-0 min-w-0"
+                 initialHtml={photos[0]?.description || ''}
+                 onSave={(val) => photos[0] && handleDescriptionChange(photos[0], val)}
+                 placeholder={photos[0] ? t('ph.text.single') : t('list.empty')}
+                 style={textStyle}
+                 disabled={!photos[0]}
+                 fontFamily={settings.defaultFontFamily}
+             />
+          </div>
+        );
+    }
+
+    if (layout === '2text1-side') {
+        return (
+          <div className="grid grid-cols-2 gap-3 h-full w-full">
+              <div className="flex flex-col gap-3 h-full min-h-0 min-w-0">
+                  <PhotoSlot 
+                      index={0} 
+                      slotId={`p${pageIndex}_s0`} 
+                      photo={photos[0]} 
+                      badgeColor={settings.badgeColor} 
+                      className="flex-1 w-full min-h-0 min-w-0 rounded-none" 
+                      onEdit={onEditPhoto} 
+                      onInsert={(p) => handleInsertPhoto(0, p)}
+                      globalIndex={startIndex + 0}
+                      onSwap={handleSwapPhotos}
+                  />
+                  <PhotoSlot 
+                      index={1} 
+                      slotId={`p${pageIndex}_s1`} 
+                      photo={photos[1]} 
+                      badgeColor={settings.badgeColor} 
+                      className="flex-1 w-full min-h-0 min-w-0 rounded-none" 
+                      onEdit={onEditPhoto} 
+                      onInsert={(p) => handleInsertPhoto(1, p)}
+                      globalIndex={startIndex + 1}
+                      onSwap={handleSwapPhotos}
+                  />
+              </div>
+              <EditableBlock
+                  key={`desc_0_${photos[0] ? photos[0].id : 'empty'}`}
+                  className="h-full w-full transition-colors min-h-0 min-w-0"
+                  initialHtml={photos[0]?.description || ''}
+                  onSave={(val) => photos[0] && handleDescriptionChange(photos[0], val)}
+                  placeholder={photos[0] ? t('ph.text.single') : t('list.empty')}
+                  style={textStyle}
+                  disabled={!photos[0]}
+                  fontFamily={settings.defaultFontFamily}
+              />
+          </div>
+        );
+    }
 
     if (layout === '1text') {
        const photo = photos[0];
@@ -1077,7 +1193,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
               slotId={`p${pageIndex}_s0`}
               photo={photo} 
               badgeColor={settings.badgeColor}
-              className="h-3/5 w-full min-h-0 min-w-0 rounded-none"
+              className="flex-1 w-full min-h-0 min-w-0 rounded-none"
               onEdit={onEditPhoto}
               onInsert={(p) => handleInsertPhoto(0, p)}
               globalIndex={startIndex + 0}
@@ -1141,7 +1257,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
     }
 
     return (
-      <div className={`grid ${getGridClass()} h-full w-full`}>
+      <div className={`grid ${getGridClass()} h-full w-full`} style={getGridStyle()}>
         {layout === '1' && (
             <PhotoSlot 
                 index={0} slotId="0" photo={photos[0]} 
@@ -1172,7 +1288,82 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
              />
            </>
         )}
+        {layout === '3grid' && (
+           <>
+              <div className="col-span-2 h-full w-full min-h-0 min-w-0">
+                 <PhotoSlot 
+                    index={0} slotId="0" photo={photos[0]} 
+                    badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
+                    onEdit={onEditPhoto} 
+                    onInsert={(p) => handleInsertPhoto(0, p)}
+                    globalIndex={startIndex + 0}
+                    onSwap={handleSwapPhotos}
+                 />
+              </div>
+              <PhotoSlot 
+                 index={1} slotId="1" photo={photos[1]} 
+                 badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
+                 onEdit={onEditPhoto} 
+                 onInsert={(p) => handleInsertPhoto(1, p)}
+                 globalIndex={startIndex + 1}
+                 onSwap={handleSwapPhotos}
+              />
+              <PhotoSlot 
+                 index={2} slotId="2" photo={photos[2]} 
+                 badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
+                 onEdit={onEditPhoto} 
+                 onInsert={(p) => handleInsertPhoto(2, p)}
+                 globalIndex={startIndex + 2}
+                 onSwap={handleSwapPhotos}
+              />
+           </>
+        )}
+        {(layout === '3col' || layout === '3row') && Array(3).fill(null).map((_, i) => (
+             <PhotoSlot 
+                key={i} index={i} slotId={i.toString()} 
+                photo={photos[i]} 
+                badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
+                onEdit={onEditPhoto} 
+                onInsert={(p) => handleInsertPhoto(i, p)}
+                globalIndex={startIndex + i}
+                onSwap={handleSwapPhotos}
+             />
+        ))}
         {layout === '4' && Array(4).fill(null).map((_, i) => (
+             <PhotoSlot 
+                key={i} index={i} slotId={i.toString()} 
+                photo={photos[i]} 
+                badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
+                onEdit={onEditPhoto} 
+                onInsert={(p) => handleInsertPhoto(i, p)}
+                globalIndex={startIndex + i}
+                onSwap={handleSwapPhotos}
+             />
+        ))}
+
+        {layout === '8' && Array(8).fill(null).map((_, i) => (
+             <PhotoSlot 
+                key={i} index={i} slotId={i.toString()} 
+                photo={photos[i]} 
+                badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
+                onEdit={onEditPhoto} 
+                onInsert={(p) => handleInsertPhoto(i, p)}
+                globalIndex={startIndex + i}
+                onSwap={handleSwapPhotos}
+             />
+        ))}
+        {layout === '9' && Array(9).fill(null).map((_, i) => (
+             <PhotoSlot 
+                key={i} index={i} slotId={i.toString()} 
+                photo={photos[i]} 
+                badgeColor={settings.badgeColor} className="h-full w-full min-h-0 min-w-0 rounded-none" 
+                onEdit={onEditPhoto} 
+                onInsert={(p) => handleInsertPhoto(i, p)}
+                globalIndex={startIndex + i}
+                onSwap={handleSwapPhotos}
+             />
+        ))}
+        {layout === 'custom' && Array((settings.customCols || 2) * (settings.customRows || 3)).fill(null).map((_, i) => (
              <PhotoSlot 
                 key={i} index={i} slotId={i.toString()} 
                 photo={photos[i]} 
@@ -1246,11 +1437,97 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
             {showLayoutMenu && state.mode === 'photos' && (
                 <div 
                   ref={menuRef}
-                  className="absolute top-full right-0 mt-2 rounded-xl shadow-xl border p-3 grid grid-cols-3 gap-3 w-64 z-50 animate-fade-in"
+                  className="absolute top-full right-0 mt-2 rounded-xl shadow-xl border p-3 grid grid-cols-3 gap-3 w-72 z-50 animate-fade-in"
                   style={{ backgroundColor: '#ffffff', borderColor: '#e4e4e7' }}
                 >
-                    {LAYOUTS.filter(l => !['2col', '1text-side', 'businesscard', 'businesscard-form', 'businesscard-form-reverse', 'invoice', 'invoice-1', 'invoice-4', 'idphoto', 'idphoto-1', 'idphoto-2', 'idphoto-4'].includes(l.id)).map(l => {
+                    {LAYOUTS.filter(l => !['2col', '3col', '3row', '1text-side', '2text1-side', 'businesscard', 'businesscard-form', 'businesscard-form-reverse', 'invoice', 'invoice-1', 'invoice-4', 'idphoto', 'idphoto-1', 'idphoto-2', 'idphoto-4'].includes(l.id)).map(l => {
                         const { isActive, previewType, label, isToggle } = getLayoutButtonData(l.id);
+                        
+                        if (l.id === 'custom') {
+                            return (
+                                <div 
+                                  key={l.id} 
+                                  className={cn(
+                                    "col-span-3 p-3 rounded-xl border flex flex-col gap-2.5 transition-all duration-300 relative overflow-hidden",
+                                    isActive 
+                                      ? 'border-[#18181b] bg-zinc-50' 
+                                      : 'border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50/50'
+                                  )}
+                                  style={{ color: '#18181b' }}
+                                >
+                                    {/* Button Header Section */}
+                                    <div 
+                                      onClick={() => handleLayoutItemClick(l.id)}
+                                      className="flex items-center justify-between cursor-pointer w-full select-none"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <LayoutPreview type={previewType} forPaper={true} />
+                                            <div className="flex flex-col text-left rtl:text-right">
+                                              <span className={cn(
+                                                "text-xs font-bold transition-colors",
+                                                isActive ? 'text-[#18181b]' : 'text-zinc-500'
+                                              )}>
+                                                {t(label)}
+                                              </span>
+                                              <span className="text-[8px] text-zinc-450 leading-none">
+                                                {state.language === 'ku' ? 'تۆڕی دەستکاری کراو' : 'Configurable grid layout'}
+                                              </span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className={cn(
+                                            "w-4 h-4 rounded-full border flex items-center justify-center transition-all",
+                                            isActive 
+                                              ? "bg-[#18181b] border-[#18181b] text-white" 
+                                              : "border-zinc-300 text-transparent"
+                                        )}>
+                                            <Check size={8} strokeWidth={3} />
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Sliders Container (Disabled when layout is not selected) */}
+                                    <div className={cn(
+                                        "grid grid-cols-2 gap-3 pt-2 border-t border-dashed border-zinc-200 transition-all duration-300",
+                                        isActive ? "opacity-100" : "opacity-40 pointer-events-none select-none"
+                                      )}
+                                    >
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center text-[9px] font-semibold text-zinc-500 uppercase tracking-wide">
+                                                <span>{t('settings.customCols')}</span>
+                                                <span className="font-bold text-zinc-800 bg-zinc-100 px-1.5 py-0.5 rounded text-[8px]">{state.settings.customCols || 2}</span>
+                                            </div>
+                                            <input 
+                                                type="range" 
+                                                min={1} 
+                                                max={6} 
+                                                step={1}
+                                                disabled={!isActive}
+                                                value={state.settings.customCols || 2} 
+                                                onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', payload: { customCols: parseInt(e.target.value) } })}
+                                                className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center text-[9px] font-semibold text-zinc-500 uppercase tracking-wide">
+                                                <span>{t('settings.customRows')}</span>
+                                                <span className="font-bold text-zinc-800 bg-zinc-100 px-1.5 py-0.5 rounded text-[8px]">{state.settings.customRows || 3}</span>
+                                            </div>
+                                            <input 
+                                                type="range" 
+                                                min={1} 
+                                                max={6} 
+                                                step={1}
+                                                disabled={!isActive}
+                                                value={state.settings.customRows || 3} 
+                                                onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', payload: { customRows: parseInt(e.target.value) } })}
+                                                className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+
                         return (
                             <button
                                 key={l.id}

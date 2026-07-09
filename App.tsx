@@ -11,25 +11,30 @@ import TextFormattingToolbar from './components/Editor/TextFormattingToolbar';
 import PrintModal from './components/Modals/PrintModal';
 import ConfirmModal from './components/Modals/ConfirmModal';
 import { Photo, LayoutType, AppState } from './types';
-import { LAYOUTS } from './constants';
+import { LAYOUTS, getLayoutCapacity } from './constants';
 import { getTranslation } from './utils/translations';
 import { Plus, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { decryptProjectData } from './utils/encryption';
 import { cn } from './lib/utils';
 import { ToastProvider, useToast } from './components/ui/toast';
 
-const AddPageButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <div className="relative group py-6 flex items-center justify-center no-print w-full">
-    <div className="absolute inset-x-0 h-px bg-border opacity-0 group-hover:opacity-100 transition-opacity"></div>
-    <button
-      onClick={onClick}
-      className="relative z-10 w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-sm transform scale-90 group-hover:scale-100"
-      title="Add New Page"
-    >
-      <Plus size={16} />
-    </button>
-  </div>
-);
+const AddPageButton: React.FC<{ onClick: () => void; isTop?: boolean }> = ({ onClick, isTop = false }) => {
+  const { state } = useApp();
+  const label = getTranslation(state.language, 'btn.addPage');
+
+  return (
+    <div className={`relative group flex items-center justify-center no-print w-full ${isTop ? 'pt-1 pb-4' : 'py-6'}`}>
+      <div className="absolute inset-x-0 h-px bg-zinc-200 dark:bg-zinc-800 opacity-60 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+      <button
+        onClick={onClick}
+        className="relative z-10 w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400 flex items-center justify-center opacity-65 group-hover:opacity-100 hover:text-zinc-900 dark:hover:text-zinc-100 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm hover:shadow-md transition-all duration-300 transform scale-90 group-hover:scale-105 active:scale-95"
+        title={label}
+      >
+        <Plus size={14} className="stroke-[2.5]" />
+      </button>
+    </div>
+  );
+};
 
 const FloatingZoomControls: React.FC<{ maxPossibleZoom: number }> = ({ maxPossibleZoom }) => {
   const { state, dispatch } = useApp();
@@ -94,7 +99,17 @@ const MainContent: React.FC = () => {
   const [resetConfirmation, setResetConfirmation] = useState<{ pageIndex: number; startIndex: number; count: number } | null>(null);
   const [droppedProjectFile, setDroppedProjectFile] = useState<string | null>(null);
   const [pendingProjectData, setPendingProjectData] = useState<{content: string; filePath?: string} | null>(null);
+  const [newlyAddedPageIndex, setNewlyAddedPageIndex] = useState<number | null>(null);
   const t = (key: string) => getTranslation(key, state.language);
+
+  useEffect(() => {
+    if (newlyAddedPageIndex !== null) {
+      const timer = setTimeout(() => {
+        setNewlyAddedPageIndex(null);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [newlyAddedPageIndex]);
 
 
 
@@ -496,7 +511,7 @@ const MainContent: React.FC = () => {
       }
 
       const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
-      const capacity = layoutDef.capacity;
+      const capacity = getLayoutCapacity(layoutId, state.settings);
 
       let pagePhotos: (Photo | null)[] = [];
       if (layoutId === 'onlytext') {
@@ -571,11 +586,12 @@ const MainContent: React.FC = () => {
       capacity = idPhotoLayout === '1' ? 1 : idPhotoLayout === '2' ? 2 : 4;
     }
     else {
-      const defaultLayout = LAYOUTS.find(l => l.id === state.globalLayout);
-      capacity = defaultLayout ? defaultLayout.capacity : 1;
+      capacity = getLayoutCapacity(state.globalLayout, state.settings);
     }
     dispatch({ type: 'INSERT_PAGE', payload: { insertIndex: insertAtIndex, count: capacity === 0 ? 1 : capacity, insertAtPageIndex } });
     dispatch({ type: 'SELECT_PAGE', payload: insertAtPageIndex });
+    setNewlyAddedPageIndex(insertAtPageIndex);
+    showToast(getTranslation('toast.pageAdded', state.language), 'success');
   };
 
   const handleDeletePageRequest = (pIndex: number, startIdx: number, count: number) => {
@@ -596,6 +612,7 @@ const MainContent: React.FC = () => {
           count: deleteConfirmation.count
         }
       });
+      showToast(getTranslation('toast.pageDeleted', state.language), 'success');
       setDeleteConfirmation(null);
     }
   };
@@ -659,7 +676,7 @@ const MainContent: React.FC = () => {
         <Sidebar />
         <main
           ref={scrollContainerRef}
-          className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8 custom-scrollbar scroll-smooth paper-canvas flex flex-col items-center print:p-0 print:m-0 print:block"
+          className="flex-1 overflow-x-hidden overflow-y-auto pt-2 md:pt-4 px-4 md:px-8 pb-4 md:pb-8 custom-scrollbar scroll-smooth paper-canvas flex flex-col items-center print:p-0 print:m-0 print:block"
         >
           {activePhotos.length === 0 && state.globalLayout !== 'onlytext' && generatedPages.length === 0 && (
             <div className="text-center text-muted-foreground mt-4 animate-fade-in no-print">
@@ -683,7 +700,7 @@ const MainContent: React.FC = () => {
               }}
             >
               {visiblePages.length > 0 && !isPrinting && startIndex === 0 && (
-                <AddPageButton onClick={() => handleAddPage(0, 0)} />
+                <AddPageButton onClick={() => handleAddPage(0, 0)} isTop={true} />
               )}
 
               {visiblePages.map((page) => {
@@ -694,7 +711,14 @@ const MainContent: React.FC = () => {
                 const isIdPhotoPage = page.layout === 'idphoto' || page.layout === 'idphoto-1' || page.layout === 'idphoto-2' || page.layout === 'idphoto-4';
                 return (
                   <React.Fragment key={page.pageIndex}>
-                    <div className={`${isLandscape ? 'a4-page-landscape' : 'a4-page'} ${isIdPhotoPage ? 'idphoto-page' : ''} relative mx-auto page-container-${page.pageIndex} ring-1 ring-black/5 print:ring-0 ${isInvoicePage && !isPrinting ? 'mb-8' : 'mb-0'} print:mb-0`}>
+                    <div className={cn(
+                      isLandscape ? 'a4-page-landscape' : 'a4-page',
+                      isIdPhotoPage ? 'idphoto-page' : '',
+                      `relative mx-auto page-container-${page.pageIndex} ring-1 ring-black/5 print:ring-0`,
+                      isInvoicePage && !isPrinting ? 'mb-8' : 'mb-0',
+                      'print:mb-0',
+                      newlyAddedPageIndex === page.pageIndex && 'animate-pulse-highlight'
+                    )}>
                       <PhotoPage
                         pageIndex={page.pageIndex}
                         startIndex={page.startIndex}

@@ -4,12 +4,12 @@ import { useApp, getCardSizeKey } from '../../store/AppContext';
 import {
     Layout, Grid, FileText, Check, X, ArrowLeftRight, Hash,
     Move, ArrowUp, Scaling, ChevronLeft, ChevronRight,
-    Layers, ImagePlus, User, Briefcase, GraduationCap, Award, Camera, Languages, Trash2, Palette,
+    Layers, User, Briefcase, GraduationCap, Award, Camera, Languages, Trash2, Palette,
     Phone, Image, PenTool, Building2, Download, Smartphone, Plus, CreditCard,
     Stamp, Sparkles, Sliders, Type, Upload, Star, Loader2, ChevronDown
 } from 'lucide-react';
 import { getStampPresets } from '../../utils/stampPresets';
-import { LAYOUTS } from '../../constants';
+import { LAYOUTS, getLayoutCapacity } from '../../constants';
 import { getTranslation } from '../../utils/translations';
 import { LayoutPreview } from './LayoutPreview';
 import { readFileAsDataURL, generateId } from '../../utils/helpers';
@@ -43,8 +43,8 @@ interface SectionProps {
 
 const Section: React.FC<SectionProps> = ({ title, icon: Icon, children }) => (
     <div className="space-y-3">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground px-1">
-            <Icon size={12} />
+        <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 tracking-wider uppercase px-1">
+            <Icon size={12} className="text-muted-foreground/60" />
             {title}
         </div>
         <div className="space-y-3">{children}</div>
@@ -70,15 +70,23 @@ const ProjectTitleEditor = ({ initialValue, onSave }: { initialValue: string, on
 
     return (
         <div className="p-4 border-b border-border">
-            <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
-                <FileText size={12} /> {t('input.projectTitle')}
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 tracking-wider uppercase mb-2">
+                <FileText size={12} className="text-muted-foreground/60" /> {t('input.projectTitle')}
             </label>
             <div className="space-y-2">
-                <textarea ref={textareaRef} value={value} onChange={(e) => { setValue(e.target.value); setHasChanges(e.target.value !== htmlToText(initialValue)); }} rows={2} className="w-full text-base font-medium bg-transparent border border-border focus:border-foreground rounded-md p-2 outline-none text-foreground transition-colors resize-none overflow-hidden" placeholder={t('placeholder.projectTitle')} dir="auto" />
+                <textarea 
+                  ref={textareaRef} 
+                  value={value} 
+                  onChange={(e) => { setValue(e.target.value); setHasChanges(e.target.value !== htmlToText(initialValue)); }} 
+                  rows={2} 
+                  className="w-full text-sm font-semibold bg-zinc-50/50 dark:bg-zinc-950/30 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-400 dark:focus:border-zinc-600 rounded-lg p-2.5 outline-none text-foreground transition-all resize-none overflow-hidden" 
+                  placeholder={t('placeholder.projectTitle')} 
+                  dir="auto" 
+                />
                 {hasChanges && (
                     <div className="flex gap-2">
-                        <Button onClick={() => { onSave(textToHtml(value)); setHasChanges(false); }} size="sm" className="flex-1"><Check size={14} /> {t('action.apply')}</Button>
-                        <Button onClick={() => { setValue(htmlToText(initialValue)); setHasChanges(false); }} variant="outline" size="sm" className="flex-1"><X size={14} /> {t('action.cancel')}</Button>
+                        <Button onClick={() => { onSave(textToHtml(value)); setHasChanges(false); }} size="sm" className="flex-1 h-8 rounded-lg text-xs font-semibold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"><Check size={14} className="mr-1" /> {t('action.apply')}</Button>
+                        <Button onClick={() => { setValue(htmlToText(initialValue)); setHasChanges(false); }} variant="outline" size="sm" className="flex-1 h-8 rounded-lg text-xs font-medium border border-zinc-200 dark:border-zinc-800"><X size={14} className="mr-1" /> {t('action.cancel')}</Button>
                     </div>
                 )}
             </div>
@@ -392,6 +400,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
         let newLayout = id as any;
         if (id === '2') newLayout = currentActiveLayout === '2' ? '2col' : '2';
         else if (id === '1text') newLayout = currentActiveLayout === '1text' ? '1text-side' : '1text';
+        else if (id === '2text1') newLayout = currentActiveLayout === '2text1' ? '2text1-side' : '2text1';
 
         // Apply to all pages: Update global layout and clear all page-specific layouts
         dispatch({ type: 'SET_LAYOUT', payload: newLayout });
@@ -404,6 +413,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
         const activeLayout = state.selectedPageIndex !== null ? (state.pageLayouts[state.selectedPageIndex] || state.globalLayout) : state.globalLayout;
         if (layout.id === '2') return { isActive: activeLayout === '2' || activeLayout === '2col', previewType: activeLayout === '2col' ? '2col' : '2', label: activeLayout === '2col' ? 'layout.2col' : 'layout.2', isToggle: true };
         if (layout.id === '1text') return { isActive: activeLayout === '1text' || activeLayout === '1text-side', previewType: activeLayout === '1text-side' ? '1text-side' : '1text', label: activeLayout === '1text-side' ? 'layout.1text-side' : 'layout.1text', isToggle: true };
+        if (layout.id === '2text1') return { isActive: activeLayout === '2text1' || activeLayout === '2text1-side', previewType: activeLayout === '2text1-side' ? '2text1-side' : '2text1', label: activeLayout === '2text1-side' ? 'layout.2text1-side' : 'layout.2text1', isToggle: true };
         return { isActive: activeLayout === layout.id, previewType: layout.id, label: layout.label, isToggle: false };
     };
 
@@ -604,17 +614,25 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
         )}>
             {/* Photos mode - Upload button at very top */}
             {state.mode === 'photos' && (
-                <div className="p-4 border-b border-border space-y-2">
+                <div className="pt-2 pb-3 px-4 border-b border-border space-y-2">
                     <input type="file" ref={photosInputRef} className="hidden" accept="image/*,.heic,.heif" multiple onChange={handlePhotosUpload} />
-                    <Button onClick={() => photosInputRef.current?.click()} className="w-full">
-                        <ImagePlus size={16} /> {t('upload.image')}
-                    </Button>
-                    <Button onClick={() => setShowTransferModal(true)} variant="outline" className="w-full" size="sm">
-                        <Smartphone size={14} /> {t('transfer.startShort')}
-                    </Button>
-                    <p className="text-[9px] text-muted-foreground text-center">
-                        {t('upload.hint')}
-                    </p>
+                    <button 
+                      onClick={() => photosInputRef.current?.click()} 
+                      className="w-full flex flex-col items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-600 hover:border-zinc-500 dark:hover:border-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/20 text-zinc-650 dark:text-zinc-300 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all duration-300 group shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
+                    >
+                        <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300/80 dark:border-zinc-700 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                          <Upload size={14} className="text-zinc-500 dark:text-zinc-300 group-hover:text-zinc-800 dark:group-hover:text-white transition-colors" />
+                        </div>
+                        <span className="text-xs font-bold tracking-wide">{t('upload.image')}</span>
+                    </button>
+                    
+                    <button 
+                      onClick={() => setShowTransferModal(true)} 
+                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-900/60 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-100 shadow-sm transition-all duration-200"
+                    >
+                        <Smartphone size={13} className="text-zinc-500 dark:text-zinc-300 shrink-0" /> 
+                        <span>{t('transfer.startShort')}</span>
+                    </button>
                 </div>
             )}
 
@@ -657,7 +675,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                     {/* Upload and wireless buttons */}
                     <div className="space-y-2">
                         <Button onClick={() => idInputRef.current?.click()} className="w-full">
-                            <ImagePlus size={16} /> {t('upload.image')}
+                            <Upload size={16} /> {t('upload.image')}
                         </Button>
                         <Button onClick={() => setShowTransferModal(true)} variant="outline" className="w-full" size="sm">
                             <Smartphone size={14} /> {t('transfer.startShort')}
@@ -886,7 +904,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                     <div className="space-y-2">
                         <input type="file" ref={invoiceSingleRef} className="hidden" accept="image/*,.heic,.heif" onChange={handleInvoiceSingleUpload} />
                         <Button onClick={() => invoiceSingleRef.current?.click()} className="w-full">
-                            <ImagePlus size={16} /> {t('upload.image')}
+                            <Upload size={16} /> {t('upload.image')}
                         </Button>
                         <Button onClick={() => setShowTransferModal(true)} variant="outline" className="w-full" size="sm">
                             <Smartphone size={14} /> {t('transfer.startShort')}
@@ -1010,10 +1028,96 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
 
             <div className="p-4 overflow-y-auto flex-1 space-y-6">
                 {state.mode === 'photos' && (
+                    <>
                     <Section title={t('section.grid')} icon={Grid}>
                         <div className="grid grid-cols-3 gap-2">
-                            {LAYOUTS.filter(l => !['2col', '1text-side', 'invoice', 'invoice-1', 'invoice-4', 'businesscard', 'businesscard-form', 'businesscard-form-reverse', 'idphoto', 'idphoto-1', 'idphoto-2', 'idphoto-4'].includes(l.id)).map((layout) => {
+                            {LAYOUTS.filter(l => !['2col', '3col', '3row', '1text-side', '2text1-side', 'invoice', 'invoice-1', 'invoice-4', 'businesscard', 'businesscard-form', 'businesscard-form-reverse', 'idphoto', 'idphoto-1', 'idphoto-2', 'idphoto-4'].includes(l.id)).map((layout) => {
                                 const { isActive, previewType, label, isToggle } = getLayoutButtonData(layout);
+                                
+                                if (layout.id === 'custom') {
+                                    return (
+                                        <div 
+                                          key={layout.id} 
+                                          className={cn(
+                                            "col-span-3 p-3 rounded-xl border flex flex-col gap-3 transition-all duration-300 relative overflow-hidden",
+                                            isActive 
+                                              ? 'border-foreground bg-accent/40 shadow-sm' 
+                                              : 'border-border hover:border-foreground/30 hover:bg-muted/30'
+                                          )}
+                                        >
+                                            {/* Button Header Section */}
+                                            <div 
+                                              onClick={() => handleLayoutClick(layout.id)}
+                                              className="flex items-center justify-between cursor-pointer w-full select-none"
+                                            >
+                                                <div className="flex items-center gap-2.5">
+                                                    <LayoutPreview type={previewType} />
+                                                    <div className="flex flex-col text-left rtl:text-right">
+                                                      <span className={cn(
+                                                        "text-xs font-bold transition-colors",
+                                                        isActive ? 'text-foreground' : 'text-zinc-500'
+                                                      )}>
+                                                        {t(label)}
+                                                      </span>
+                                                      <span className="text-[9px] text-muted-foreground">
+                                                        {state.language === 'ku' ? 'تۆڕی دەستکاری کراو' : 'Configurable grid layout'}
+                                                      </span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className={cn(
+                                                    "w-5 h-5 rounded-full border flex items-center justify-center transition-all",
+                                                    isActive 
+                                                      ? "bg-foreground border-foreground text-background" 
+                                                      : "border-zinc-300 dark:border-zinc-700 text-transparent"
+                                                )}>
+                                                    <Check size={10} strokeWidth={3} />
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Sliders Container (Disabled when layout is not selected) */}
+                                            <div className={cn(
+                                                "grid grid-cols-2 gap-3 pt-2.5 border-t border-dashed border-border/80 transition-all duration-300",
+                                                isActive ? "opacity-100" : "opacity-40 pointer-events-none select-none"
+                                              )}
+                                            >
+                                                <div className="space-y-1.5">
+                                                    <div className="flex justify-between items-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                                        <span>{t('settings.customCols')}</span>
+                                                        <span className="font-bold text-foreground bg-zinc-150 dark:bg-zinc-800 px-1.5 py-0.5 rounded">{state.settings.customCols || 2}</span>
+                                                    </div>
+                                                    <input 
+                                                        type="range" 
+                                                        min={1} 
+                                                        max={6} 
+                                                        step={1}
+                                                        disabled={!isActive}
+                                                        value={state.settings.customCols || 2} 
+                                                        onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', payload: { customCols: parseInt(e.target.value) } })}
+                                                        className="w-full accent-foreground h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <div className="flex justify-between items-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                                        <span>{t('settings.customRows')}</span>
+                                                        <span className="font-bold text-foreground bg-zinc-150 dark:bg-zinc-800 px-1.5 py-0.5 rounded">{state.settings.customRows || 3}</span>
+                                                    </div>
+                                                    <input 
+                                                        type="range" 
+                                                        min={1} 
+                                                        max={6} 
+                                                        step={1}
+                                                        disabled={!isActive}
+                                                        value={state.settings.customRows || 3} 
+                                                        onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', payload: { customRows: parseInt(e.target.value) } })}
+                                                        className="w-full accent-foreground h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
                                 return (
                                     <button key={layout.id} onClick={() => handleLayoutClick(layout.id)} className={`relative p-2 rounded-md border flex flex-col items-center justify-center gap-1.5 transition-all group ${isActive ? 'border-foreground bg-accent' : 'border-border hover:border-foreground/60 hover:bg-muted/50'}`}>
                                         <LayoutPreview type={previewType} />
@@ -1025,6 +1129,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                             })}
                         </div>
                     </Section>
+                    </>
                 )}
 
                 {(state.mode === 'photos' || state.mode === 'idphoto') && (
@@ -1064,8 +1169,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                                             let currentPhotoIndex = 0;
                                             for (let p = 0; p < pIdx; p++) {
                                                 let layoutId = state.pageLayouts[p] || state.globalLayout;
-                                                const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
-                                                currentPhotoIndex += layoutDef.capacity;
+                                                currentPhotoIndex += getLayoutCapacity(layoutId, state.settings);
                                             }
                                             return currentPhotoIndex;
                                         };
@@ -1145,11 +1249,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                                 let currentPhotoIndex = 0;
                                 for (let p = 0; p < state.manualPageCount; p++) {
                                     const layoutId = state.pageLayouts[p] || state.globalLayout;
-                                    const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
-                                    if (cardIndex >= currentPhotoIndex && cardIndex < currentPhotoIndex + layoutDef.capacity) {
+                                    const cap = getLayoutCapacity(layoutId, state.settings);
+                                    if (cardIndex >= currentPhotoIndex && cardIndex < currentPhotoIndex + cap) {
                                         return { pageIndex: p, startIndex: currentPhotoIndex, layoutId };
                                     }
-                                    currentPhotoIndex += layoutDef.capacity;
+                                    currentPhotoIndex += cap;
                                 }
                                 return { pageIndex: 0, startIndex: 0, layoutId: state.globalLayout };
                             };
@@ -1276,8 +1380,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
                                 let currentPhotoIndex = 0;
                                 for (let p = 0; p < pageIndex; p++) {
                                     let layoutId = state.pageLayouts[p] || state.globalLayout;
-                                    const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
-                                    currentPhotoIndex += layoutDef.capacity;
+                                    currentPhotoIndex += getLayoutCapacity(layoutId, state.settings);
                                 }
                                 return currentPhotoIndex;
                             };

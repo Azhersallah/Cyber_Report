@@ -629,38 +629,38 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
       {photo && (
         <div 
             className={cn(
-                "absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-1 bg-background/95 backdrop-blur-sm border border-border rounded-md shadow-lg transition-all transform z-[100] no-print",
-                isHovered ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0 pointer-events-none"
+                "absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 bg-background/95 dark:bg-zinc-950/95 backdrop-blur-md border border-border dark:border-zinc-800 rounded-xl shadow-lg shadow-black/10 transition-all transform z-[100] no-print",
+                isHovered ? "translate-y-0 opacity-100 scale-100" : "translate-y-2 opacity-0 scale-95 pointer-events-none"
             )}
         >
             {!isIdPhotoSlot && (
                 <>
-                    <button onClick={handleRotate} className="p-1.5 hover:bg-muted rounded-sm text-muted-foreground hover:text-foreground transition-colors" title={t('slot.rotate')}>
+                    <button onClick={handleRotate} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={t('slot.rotate')}>
                     <RotateCw size={14} />
                     </button>
-                    <button onClick={() => onEdit(photo)} className="p-1.5 hover:bg-muted rounded-sm text-muted-foreground hover:text-foreground transition-colors" title={t('slot.edit')}>
+                    <button onClick={() => onEdit(photo)} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={t('slot.edit')}>
                     <Edit2 size={14} />
                     </button>
-                    <button onClick={handleReplaceClick} className="p-1.5 hover:bg-muted rounded-sm text-muted-foreground hover:text-foreground transition-colors" title={t('slot.replace')}>
+                    <button onClick={handleReplaceClick} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={t('slot.replace')}>
                     <ImageUp size={14} />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className="p-1.5 hover:bg-muted rounded-sm text-muted-foreground hover:text-foreground transition-colors" title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
+                    <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
                     <Download size={14} />
                     </button>
-                    <button onClick={handleRemove} className="p-1.5 hover:bg-destructive/10 rounded-sm text-muted-foreground hover:text-destructive transition-colors" title={t('slot.remove')}>
+                    <button onClick={handleRemove} className="p-1.5 hover:bg-destructive/10 dark:hover:bg-red-500/20 rounded-lg text-muted-foreground dark:text-zinc-400 hover:text-destructive dark:hover:text-red-400 transition-colors duration-150" title={t('slot.remove')}>
                     <X size={14} />
                     </button>
                 </>
             )}
             {isIdPhotoSlot && (
                 <>
-                    <button onClick={() => onEdit(photo)} className="p-1.5 hover:bg-muted rounded-sm text-muted-foreground hover:text-foreground transition-colors" title={t('slot.edit')}>
+                    <button onClick={() => onEdit(photo)} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={t('slot.edit')}>
                     <Edit2 size={14} />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className="p-1.5 hover:bg-muted rounded-sm text-muted-foreground hover:text-foreground transition-colors" title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
+                    <button onClick={(e) => { e.stopPropagation(); if (!photo) return; const link = document.createElement('a'); link.download = photo.name || 'photo.png'; link.href = photo.src; link.click(); }} className="p-1.5 hover:bg-muted dark:hover:bg-zinc-800/80 rounded-lg text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors duration-150" title={state.language === 'ku' ? 'داگرتن' : 'Save'}>
                     <Download size={14} />
                     </button>
-                    <button onClick={handleRemove} className="p-1.5 hover:bg-destructive/10 rounded-sm text-muted-foreground hover:text-destructive transition-colors" title={t('slot.remove')}>
+                    <button onClick={handleRemove} className="p-1.5 hover:bg-destructive/10 dark:hover:bg-red-500/20 rounded-lg text-muted-foreground dark:text-zinc-400 hover:text-destructive dark:hover:text-red-400 transition-colors duration-150" title={t('slot.remove')}>
                     <X size={14} />
                     </button>
                 </>

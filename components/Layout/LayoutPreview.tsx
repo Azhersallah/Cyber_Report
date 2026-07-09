@@ -18,9 +18,106 @@ export const LayoutPreview: React.FC<LayoutPreviewProps> = ({ type, forPaper = f
   if (type === '1') grid = 'grid-cols-1 grid-rows-1';
   else if (type === '2') grid = 'grid-cols-1 grid-rows-2';
   else if (type === '2col') grid = 'grid-cols-2 grid-rows-1';
+  else if (type === '3col') grid = 'grid-cols-3 grid-rows-1';
+  else if (type === '3row') grid = 'grid-cols-1 grid-rows-3';
   else if (type === '4') grid = 'grid-cols-2 grid-rows-2';
-  else if (type === '1text') grid = 'grid-cols-1 grid-rows-[2fr_1fr]';
-  
+  else if (type === '8') grid = 'grid-cols-2 grid-rows-4';
+  else if (type === '9') grid = 'grid-cols-3 grid-rows-3';
+  else if (type === 'custom') grid = 'grid-cols-2 grid-rows-3';
+  else if (type === '1text') grid = 'grid-cols-1 grid-rows-2';
+
+  if (type === 'custom') {
+      return (
+        <div 
+          className={`w-7 h-9 rounded-sm border p-0.5 grid grid-cols-2 grid-rows-2 gap-0.5 pointer-events-none ${!forPaper ? 'bg-background border-border/80' : ''}`}
+          style={forPaper ? { backgroundColor: bgColor, borderColor } : undefined}
+        >
+          <div className={`border border-dashed rounded-[1px] ${!forPaper ? 'border-foreground/30 bg-foreground/5' : 'border-zinc-300'}`}></div>
+          <div className={`border border-dashed rounded-[1px] ${!forPaper ? 'border-foreground/30 bg-foreground/5' : 'border-zinc-300'}`}></div>
+          <div className={`border border-dashed rounded-[1px] ${!forPaper ? 'border-foreground/30 bg-foreground/5' : 'border-zinc-300'}`}></div>
+          <div className={`border border-dashed rounded-[1px] ${!forPaper ? 'border-foreground/30 bg-foreground/5' : 'border-zinc-300'}`}></div>
+        </div>
+      );
+  }
+
+  if (type === '2text1') {
+      return (
+        <div 
+          className={`w-7 h-9 rounded-sm border p-0.5 grid grid-cols-2 grid-rows-2 gap-0.5 pointer-events-none ${!forPaper ? 'bg-background border-border' : ''}`}
+          style={forPaper ? { backgroundColor: bgColor, borderColor } : undefined}
+        >
+            <div 
+              className={`rounded-[1px] ${!forPaper ? 'bg-foreground/40' : ''}`}
+              style={forPaper ? { backgroundColor: fillColor } : undefined}
+            ></div>
+            <div 
+              className={`rounded-[1px] ${!forPaper ? 'bg-foreground/40' : ''}`}
+              style={forPaper ? { backgroundColor: fillColor } : undefined}
+            ></div>
+            <div 
+              className={`col-span-2 rounded-[1px] flex items-center justify-center ${!forPaper ? 'bg-muted' : ''}`}
+              style={forPaper ? { backgroundColor: mutedBg } : undefined}
+            >
+                <div 
+                  className={`w-3.5 h-px ${!forPaper ? 'bg-foreground/40' : ''}`}
+                  style={forPaper ? { backgroundColor: fillColor } : undefined}
+                ></div>
+            </div>
+        </div>
+      );
+  }
+
+  if (type === '2text1-side') {
+      return (
+        <div 
+          className={`w-7 h-9 rounded-sm border p-0.5 grid grid-cols-2 gap-0.5 pointer-events-none ${!forPaper ? 'bg-background border-border' : ''}`}
+          style={forPaper ? { backgroundColor: bgColor, borderColor } : undefined}
+        >
+            <div className="flex flex-col gap-0.5 h-full">
+                <div 
+                  className={`rounded-[1px] h-full w-full ${!forPaper ? 'bg-foreground/40' : ''}`}
+                  style={forPaper ? { backgroundColor: fillColor } : undefined}
+                ></div>
+                <div 
+                  className={`rounded-[1px] h-full w-full ${!forPaper ? 'bg-foreground/40' : ''}`}
+                  style={forPaper ? { backgroundColor: fillColor } : undefined}
+                ></div>
+            </div>
+            <div 
+              className={`rounded-[1px] h-full w-full flex items-center justify-center ${!forPaper ? 'bg-muted' : ''}`}
+              style={forPaper ? { backgroundColor: mutedBg } : undefined}
+            >
+                <div 
+                  className={`w-1.5 h-px ${!forPaper ? 'bg-foreground/40' : ''}`}
+                  style={forPaper ? { backgroundColor: fillColor } : undefined}
+                ></div>
+            </div>
+        </div>
+      );
+  }
+
+  if (type === '3grid') {
+      return (
+        <div 
+          className={`w-7 h-9 rounded-sm border p-0.5 grid grid-cols-2 grid-rows-2 gap-0.5 pointer-events-none ${!forPaper ? 'bg-background border-border' : ''}`}
+          style={forPaper ? { backgroundColor: bgColor, borderColor } : undefined}
+        >
+            <div 
+              className={`col-span-2 rounded-[1px] ${!forPaper ? 'bg-foreground/40' : ''}`}
+              style={forPaper ? { backgroundColor: fillColor } : undefined}
+            ></div>
+            <div 
+              className={`rounded-[1px] ${!forPaper ? 'bg-foreground/40' : ''}`}
+              style={forPaper ? { backgroundColor: fillColor } : undefined}
+            ></div>
+            <div 
+              className={`rounded-[1px] ${!forPaper ? 'bg-foreground/40' : ''}`}
+              style={forPaper ? { backgroundColor: fillColor } : undefined}
+            ></div>
+        </div>
+      );
+  }
+
   if (type === '2text') {
       return (
         <div 
@@ -153,7 +250,14 @@ export const LayoutPreview: React.FC<LayoutPreviewProps> = ({ type, forPaper = f
       className={`w-7 h-9 rounded-sm border p-0.5 grid gap-0.5 pointer-events-none ${grid} ${!forPaper ? 'bg-background border-border' : ''}`}
       style={forPaper ? { backgroundColor: bgColor, borderColor } : undefined}
     >
-      {!isOnlyText && !type.includes('text') && ['1', '2', '2col', '4'].includes(type) && Array(type === '2col' ? 2 : parseInt(type)).fill(0).map((_, i) => (
+      {!isOnlyText && !type.includes('text') && ['1', '2', '2col', '3col', '3row', '4', '8', '9', 'custom'].includes(type) && Array(
+        type === '2col' ? 2 : 
+        type === '3col' || type === '3row' ? 3 : 
+        type === 'custom' ? 6 : 
+        type === '8' ? 8 : 
+        type === '9' ? 9 : 
+        parseInt(type)
+      ).fill(0).map((_, i) => (
         <div 
           key={i} 
           className={`rounded-[1px] w-full h-full ${!forPaper ? 'bg-foreground/40' : ''}`}
