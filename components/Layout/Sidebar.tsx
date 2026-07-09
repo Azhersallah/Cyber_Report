@@ -616,9 +616,53 @@ const Sidebar: React.FC<SidebarProps> = ({ isActivated = true, activeResumeSecti
         }
     };
 
-    const totalPages = state.mode === 'invoice'
-      ? Math.ceil(Math.max(0, ((state.settings.invoiceEndNumber ?? 100) - (state.settings.invoiceStartNumber ?? 1) + 1)) / 2)
-      : state.manualPageCount;
+    let totalPages = state.manualPageCount;
+    if (state.mode === 'invoice') {
+        const numberingMode = state.settings.invoiceNumberStyle?.numberingMode || 'all-same';
+        const startNum = state.settings.invoiceStartNumber ?? 1;
+        const endNum = state.settings.invoiceEndNumber ?? 100;
+        const totalInvoices = Math.max(0, endNum - startNum + 1);
+        const invoiceLayout = state.settings.invoiceLayout || '2-landscape';
+        
+        if (invoiceLayout === '2-landscape') {
+            totalPages = numberingMode === 'all-same' ? totalInvoices : Math.ceil(totalInvoices / 2);
+        } else if (invoiceLayout === '4-portrait') {
+            totalPages = numberingMode === 'all-same' ? totalInvoices : Math.ceil(totalInvoices / 4);
+        } else {
+            totalPages = totalInvoices;
+        }
+    } else if (state.mode === 'idphoto') {
+        const idPhotoLayout = state.settings.idPhotoLayout || '4';
+        let currentSectionIndex = 0;
+        let pageIndex = 0;
+        const numA6Sections = idPhotoLayout === '1' ? 1 : idPhotoLayout === '2' ? 2 : 4;
+        const capacity = numA6Sections * 12;
+        const activePhotos = state.photos;
+
+        while (currentSectionIndex < activePhotos.length || pageIndex < state.manualPageCount) {
+            currentSectionIndex += capacity;
+            pageIndex++;
+            if (pageIndex > 1000) break;
+        }
+        totalPages = pageIndex;
+    } else if (state.mode === 'photos') {
+        let currentPhotoIndex = 0;
+        let pageIndex = 0;
+        const activePhotos = state.photos;
+        
+        while (currentPhotoIndex < activePhotos.length || pageIndex < state.manualPageCount) {
+            const layoutId = state.pageLayouts[pageIndex] || state.globalLayout;
+            const capacity = getLayoutCapacity(layoutId, state.settings);
+            
+            if (layoutId !== 'onlytext') {
+                currentPhotoIndex += capacity;
+            }
+            pageIndex++;
+            if (pageIndex > 1000) break;
+        }
+        totalPages = pageIndex;
+    }
+
     const sectionSize = state.settings.sectionSize || 10;
     const totalSections = Math.ceil(totalPages / sectionSize);
     const currentSection = state.currentSectionIndex;
