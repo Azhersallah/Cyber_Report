@@ -10,7 +10,7 @@ import {
 import { useApp } from '../../store/AppContext';
 import { AppMode } from '../../types';
 import { getTranslation } from '../../utils/translations';
-import { readFileAsDataURL } from '../../utils/helpers';
+import { readFileAsDataURL, getTotalPagesCount } from '../../utils/helpers';
 import { encryptProjectData, decryptProjectData } from '../../utils/encryption';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -770,7 +770,7 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-secondary/50 dark:bg-secondary/30 border border-border/80 rounded-full font-bold text-muted-foreground">
               <Layers size={11} className="shrink-0 text-muted-foreground" />
               <span>
-                {state.manualPageCount} {state.language === 'ku' ? 'پەڕە' : state.language === 'ar' ? 'صفحة' : 'Pages'}
+                {getTotalPagesCount(state)} {state.language === 'ku' ? 'پەڕە' : state.language === 'ar' ? 'صفحة' : 'Pages'}
               </span>
             </div>
           </>
@@ -789,7 +789,7 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-secondary/50 dark:bg-secondary/30 border border-border/80 rounded-full font-bold text-muted-foreground">
               <Layers size={11} className="shrink-0 text-muted-foreground" />
               <span>
-                {Math.ceil(Math.max(0, ((state.settings.invoiceEndNumber ?? 100) - (state.settings.invoiceStartNumber ?? 1) + 1)) / 2)} {state.language === 'ku' ? 'پەڕە' : state.language === 'ar' ? 'صفحة' : 'Pages'}
+                {getTotalPagesCount(state)} {state.language === 'ku' ? 'پەڕە' : state.language === 'ar' ? 'صفحة' : 'Pages'}
               </span>
             </div>
           </>

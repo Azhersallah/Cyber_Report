@@ -410,8 +410,7 @@ export const INITIAL_SETTINGS: AppSettings = {
   autoSaveEnabled: false,
   autoSaveInterval: 5, // 5 minutes default
 
-  // Auto Export to Word Settings
-  autoExportWord: true, // Default enabled - automatically export to Word when saving in Photos mode
+  autoExportWord: false, // Default disabled - automatically export to Word when saving in Photos mode
 
   // AI Settings
   geminiApiKey: '',
