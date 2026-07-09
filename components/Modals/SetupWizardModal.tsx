@@ -25,12 +25,12 @@ const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ onClose }) => {
   const t = (key: string) => {
     const wizardTranslations: Record<string, Record<'ku' | 'en', string>> = {
       'wizard.title': {
-        ku: 'ڕێکخستنی یەکەم جار',
-        en: 'Initial Configuration'
+        ku: 'ڕێکخستنی بەرنامە',
+        en: 'Application Settings'
       },
       'wizard.subtitle': {
-        ku: 'تکایە پێش دەستپێکردن ڕێکخستنە بنچینەییەکان بۆ ئەپەکە ئەنجام بدە',
-        en: 'Please configure the basic settings for the application before starting'
+        ku: 'تکایە پێش دەستپێکردن ڕێکخستن بۆ بەرنامەکەت بکە',
+        en: 'Please configure settings for your program before starting'
       },
       'wizard.langTitle': {
         ku: 'زمان / Language',
@@ -57,8 +57,8 @@ const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ onClose }) => {
         en: 'Upload Logo'
       },
       'wizard.finish': {
-        ku: 'تەواوکردن و پاشەکەوتکردن',
-        en: 'Save & Finish Setup'
+        ku: 'پاشەکەوت کردن',
+        en: 'Save Settings'
       },
       'wizard.placeholderName': {
         ku: 'ناوت لێرە بنووسە...',
@@ -229,14 +229,14 @@ const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ onClose }) => {
             <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
               <ImageIcon size={13} /> {t('wizard.logo')}
             </label>
-            <div className="border border-dashed border-border rounded-lg p-3 bg-muted/20 hover:bg-muted/40 transition-all flex flex-col items-center justify-center text-center">
+            <div className="w-full">
               {logo ? (
-                <div className="space-y-2 w-full">
-                  <img src={logo} alt="Logo" className="max-h-16 object-contain mx-auto" />
+                <div className="p-3 rounded-xl border border-border bg-muted/10 space-y-3 flex flex-col items-center justify-center">
+                  <img src={logo} alt="Logo" className="max-h-16 object-contain" />
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full text-xs"
+                    className="w-full text-xs font-medium text-destructive hover:bg-destructive/10 border-destructive/20"
                     onClick={() => setLogo(null)}
                   >
                     <Trash2 size={12} className="mr-1.5 shrink-0" />
@@ -244,11 +244,13 @@ const SetupWizardModal: React.FC<SetupWizardModalProps> = ({ onClose }) => {
                   </Button>
                 </div>
               ) : (
-                <label className="w-full cursor-pointer flex flex-col items-center justify-center py-3">
-                  <ImageIcon size={24} className="text-muted-foreground/40 mb-1.5" />
-                  <span className="text-xs font-medium text-primary hover:underline">
-                    {t('wizard.uploadLogo')}
-                  </span>
+                <label className="cursor-pointer w-full block">
+                  <div className="w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-3 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-600 hover:border-zinc-500 dark:hover:border-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900/20 text-zinc-650 dark:text-zinc-300 hover:text-zinc-800 dark:hover:text-zinc-100 transition-all duration-300 group shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300/80 dark:border-zinc-700 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                      <ImageIcon size={14} className="text-zinc-500 dark:text-zinc-300 group-hover:text-zinc-800 dark:group-hover:text-white transition-colors" />
+                    </div>
+                    <span className="text-xs font-bold tracking-wide">{t('wizard.uploadLogo')}</span>
+                  </div>
                   <input
                     type="file"
                     className="hidden"
