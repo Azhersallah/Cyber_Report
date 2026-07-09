@@ -10,6 +10,7 @@ import ImageEditor from './components/Editor/ImageEditor';
 import TextFormattingToolbar from './components/Editor/TextFormattingToolbar';
 import PrintModal from './components/Modals/PrintModal';
 import ConfirmModal from './components/Modals/ConfirmModal';
+import SetupWizardModal from './components/Modals/SetupWizardModal';
 import { Photo, LayoutType, AppState } from './types';
 import { LAYOUTS, getLayoutCapacity } from './constants';
 import { getTranslation } from './utils/translations';
@@ -100,7 +101,15 @@ const MainContent: React.FC = () => {
   const [droppedProjectFile, setDroppedProjectFile] = useState<string | null>(null);
   const [pendingProjectData, setPendingProjectData] = useState<{content: string; filePath?: string} | null>(null);
   const [newlyAddedPageIndex, setNewlyAddedPageIndex] = useState<number | null>(null);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
   const t = (key: string) => getTranslation(key, state.language);
+
+  useEffect(() => {
+    const isSetupCompleted = localStorage.getItem('photoPrinterSetupCompleted') === 'true';
+    if (!isSetupCompleted) {
+      setShowSetupWizard(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (newlyAddedPageIndex !== null) {
@@ -541,7 +550,9 @@ const MainContent: React.FC = () => {
 
   const sectionSize = state.settings.sectionSize || 10;
   const startIndex = state.currentSectionIndex * sectionSize;
-  const visiblePages = isPrinting ? generatedPages : generatedPages.slice(startIndex, startIndex + sectionSize);
+  const visiblePages = isPrinting
+    ? (pagesToPrint ? generatedPages.filter(p => pagesToPrint.includes(p.pageIndex)) : generatedPages)
+    : generatedPages.slice(startIndex, startIndex + sectionSize);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -640,13 +651,6 @@ const MainContent: React.FC = () => {
     setIsPrinting(true);
   };
 
-  const pagesToHide = pagesToPrint
-    ? generatedPages.filter(p => !pagesToPrint.includes(p.pageIndex))
-    : [];
-  const hidePagesCss = pagesToHide.length > 0
-    ? `@media print { ${pagesToHide.map(p => `.page-container-${p.pageIndex}`).join(', ')} { display: none !important; } }`
-    : '';
-
   const isInvoice = state.mode === 'invoice';
   const invoiceLayout = state.settings.invoiceLayout || '2-landscape';
   const isLandscapeInvoice = isInvoice && invoiceLayout === '2-landscape';
@@ -662,9 +666,6 @@ const MainContent: React.FC = () => {
       "flex flex-col h-screen overflow-hidden bg-background",
       state.language === 'ku' ? 'font-kufi' : 'font-sans'
     )}>
-      {pagesToPrint && hidePagesCss && (
-        <style dangerouslySetInnerHTML={{ __html: hidePagesCss }} />
-      )}
       {state.mode === 'invoice' && (
         <style dangerouslySetInnerHTML={{ __html: `@media print { @page { size: A4 ${state.settings.invoiceLayout === '2-landscape' ? 'landscape' : 'portrait'}; margin: 0; } }` }} />
       )}
@@ -859,6 +860,10 @@ const MainContent: React.FC = () => {
           onClose={() => setPendingProjectData(null)}
           isDestructive={false}
         />
+      )}
+
+      {showSetupWizard && (
+        <SetupWizardModal onClose={() => setShowSetupWizard(false)} />
       )}
     </div>
   );
