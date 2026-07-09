@@ -1774,7 +1774,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
            </div>
        )}
 
-       <div className="flex-1 min-h-0 min-w-0 relative">
+       <div className={cn("flex-1 min-h-0 min-w-0 relative", showLayoutMenu && "pointer-events-none")}>
           {renderContent()}
        </div>
 
