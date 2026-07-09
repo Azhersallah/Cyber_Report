@@ -768,9 +768,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const newPageTitles = { ...state.pageTitles };
       delete newPageTitles[pageIndex];
 
-      const newPageLayouts = { ...state.pageLayouts };
-      delete newPageLayouts[pageIndex];
-
       const newTextAreas = { ...state.textAreas };
       Object.keys(newTextAreas).forEach(key => {
         const match = key.match(/^page_(\d+)(.*)$/);
@@ -797,7 +794,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
         [activeKey]: newPhotos,
         pageTitles: newPageTitles,
         textAreas: newTextAreas,
-        pageLayouts: newPageLayouts,
         businessCardSizes: newBusinessCardSizes
       };
     }

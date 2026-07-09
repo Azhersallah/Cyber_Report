@@ -87,6 +87,7 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
   const t = (key: string) => getTranslation(key, state.language);
   const { settings } = state;
   const [isHovered, setIsHovered] = useState(false);
+  const [isToolbarHovered, setIsToolbarHovered] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isDraggingOverlay, setIsDraggingOverlay] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
@@ -628,9 +629,11 @@ const PhotoSlot: React.FC<PhotoSlotProps> = ({
 
       {photo && (
         <div 
+            onMouseEnter={() => setIsToolbarHovered(true)}
+            onMouseLeave={() => setIsToolbarHovered(false)}
             className={cn(
                 "absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 bg-background/95 dark:bg-zinc-950/95 backdrop-blur-md border border-border dark:border-zinc-800 rounded-xl shadow-lg shadow-black/10 transition-all transform z-[100] no-print",
-                isHovered ? "translate-y-0 opacity-100 scale-100" : "translate-y-2 opacity-0 scale-95 pointer-events-none"
+                (isHovered || isToolbarHovered) ? "translate-y-0 opacity-100 scale-100" : "translate-y-2 opacity-0 scale-95 pointer-events-none"
             )}
         >
             {!isIdPhotoSlot && (
