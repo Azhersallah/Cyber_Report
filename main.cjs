@@ -335,7 +335,7 @@ function openProjectFile(filePath) {
 // ============================================
 
 const GITHUB_OWNER = 'Azhersallah';
-const GITHUB_REPO = 'Photo-Printer-Free';
+const GITHUB_REPO = 'Cyber_Report';
 let latestReleaseInfo = null;
 
 async function fetchLatestRelease() {
