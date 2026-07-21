@@ -372,8 +372,11 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
     }
     
     isSavingRef.current = true;
+    window.dispatchEvent(new CustomEvent('project-save-start', { detail: { percent: 5, stage: 'encrypt' } }));
     
     try {
+      await new Promise(r => setTimeout(r, 20));
+
       const { settings, ...projectDataToSave } = state;
       console.log('Photos count:', projectDataToSave.photos?.length || 0);
       console.log('CardPhotos count:', projectDataToSave.cardPhotos?.length || 0);
@@ -451,6 +454,7 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
       showToast(t('toast.saveFailed') + ': ' + (err as Error).message, 'error');
     } finally {
       isSavingRef.current = false;
+      window.dispatchEvent(new CustomEvent('project-save-end'));
     }
     
     console.log('=== SAVE ENDED ===');
@@ -463,9 +467,13 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
         return;
       }
       
-      const { settings, ...projectDataToSave } = state;
-      const projectJson = JSON.stringify(projectDataToSave);
+      window.dispatchEvent(new CustomEvent('project-save-start', { detail: { percent: 5, stage: 'encrypt' } }));
+      
       try {
+          await new Promise(r => setTimeout(r, 20));
+
+          const { settings, ...projectDataToSave } = state;
+          const projectJson = JSON.stringify(projectDataToSave);
           const encryptedContent = await encryptProjectData(projectJson);
           
           if (isElectron && ipcRenderer) {
@@ -554,6 +562,8 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
           }
       } catch (err) {
           showToast(t('toast.saveFailed'), 'error');
+      } finally {
+          window.dispatchEvent(new CustomEvent('project-save-end'));
       }
   };
 
@@ -565,8 +575,12 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
         return;
       }
       
-      if (isElectron && ipcRenderer) {
-        try {
+      window.dispatchEvent(new CustomEvent('project-load-start', { detail: { percent: 5, stage: 'read' } }));
+
+      try {
+        await new Promise(r => setTimeout(r, 20));
+
+        if (isElectron && ipcRenderer) {
           const result = await ipcRenderer.invoke('open-project-dialog');
           console.log('Open dialog result:', result.success, 'Content length:', result.content?.length);
           
@@ -575,9 +589,15 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
             const decryptedJson = await decryptProjectData(result.content);
             console.log('Decrypted length:', decryptedJson?.length);
             
+            window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 90, stage: 'parse' } }));
+            await new Promise(r => setTimeout(r, 20));
+
             const parsed = JSON.parse(decryptedJson);
             console.log('Parsed photos:', parsed.photos?.length, 'cardPhotos:', parsed.cardPhotos?.length);
             
+            window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 96, stage: 'render' } }));
+            await new Promise(r => setTimeout(r, 20));
+
             if (parsed && typeof parsed === 'object') {
               dispatch({ type: 'LOAD_PROJECT', payload: parsed });
               setCurrentFilePath(result.filePath);
@@ -585,33 +605,50 @@ const Header: React.FC<HeaderProps> = ({ onPrintClick, isActivated = true }) => 
               showToast(t('toast.projectOpened'), 'success');
               console.log('Project loaded successfully');
             }
+            await new Promise(r => setTimeout(r, 100));
           }
-        } catch (err) {
-          console.error('Open project error:', err);
-          showToast(t('toast.openFailed'), 'error');
+        } else {
+          const file = e?.target?.files?.[0];
+          if (!file) {
+            window.dispatchEvent(new CustomEvent('project-load-end'));
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+              try {
+                  const encryptedContent = event.target?.result as string;
+                  console.log('File content length:', encryptedContent?.length);
+                  const decryptedJson = await decryptProjectData(encryptedContent);
+                  
+                  window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 90, stage: 'parse' } }));
+                  await new Promise(r => setTimeout(r, 20));
+
+                  const parsed = JSON.parse(decryptedJson);
+
+                  window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 96, stage: 'render' } }));
+                  await new Promise(r => setTimeout(r, 20));
+
+                  if (parsed && typeof parsed === 'object') {
+                      dispatch({ type: 'LOAD_PROJECT', payload: parsed });
+                      showToast(t('toast.projectOpened'), 'success');
+                  }
+                  await new Promise(r => setTimeout(r, 100));
+              } catch (err) {
+                  console.error('Open project error:', err);
+                  showToast(t('toast.openFailed'), 'error');
+              } finally {
+                  window.dispatchEvent(new CustomEvent('project-load-end'));
+              }
+          };
+          reader.readAsText(file);
+          if (e?.target) e.target.value = '';
+          return;
         }
-      } else {
-        const file = e?.target?.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            try {
-                const encryptedContent = event.target?.result as string;
-                console.log('File content length:', encryptedContent?.length);
-                const decryptedJson = await decryptProjectData(encryptedContent);
-                console.log('Decrypted length:', decryptedJson?.length);
-                const parsed = JSON.parse(decryptedJson);
-                if (parsed && typeof parsed === 'object') {
-                    dispatch({ type: 'LOAD_PROJECT', payload: parsed });
-                    showToast(t('toast.projectOpened'), 'success');
-                }
-            } catch (err) {
-                console.error('Open project error:', err);
-                showToast(t('toast.openFailed'), 'error');
-            }
-        };
-        reader.readAsText(file);
-        if (e?.target) e.target.value = '';
+      } catch (err) {
+        console.error('Open project error:', err);
+        showToast(t('toast.openFailed'), 'error');
+      } finally {
+        window.dispatchEvent(new CustomEvent('project-load-end'));
       }
       
       console.log('=== OPEN PROJECT ENDED ===');
