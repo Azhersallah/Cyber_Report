@@ -57,7 +57,7 @@ import { getLayoutCapacity } from '../constants';
 
 export const getTotalPagesCount = (state: AppState): number => {
   if (state.mode === 'invoice') {
-    const numberingMode = state.settings.invoiceNumberStyle?.numberingMode || 'all-same';
+    const numberingMode = state.settings.invoiceNumberingMode || 'all-same';
     const startNum = state.settings.invoiceStartNumber ?? 1;
     const endNum = state.settings.invoiceEndNumber ?? 100;
     const totalInvoices = Math.max(0, endNum - startNum + 1);

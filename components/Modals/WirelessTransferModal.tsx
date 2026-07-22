@@ -20,17 +20,17 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
   const t = (key: string) => getTranslation(key, state.language);
   const [activeTab, setActiveTab] = useState<'app' | 'folder'>('app');
   const [savePath, setSavePath] = useState('');
-  
+
   // New Network Mode Selection
   const [networkMode, setNetworkMode] = useState<'standard' | 'hotspot' | null>(null);
-  
+
   const [serverRunning, setServerRunning] = useState(false);
   const [serverUrl, setServerUrl] = useState('');
   const [serverIP, setServerIP] = useState('');
   const [serverPort, setServerPort] = useState(0);
   const [hotspotSSID, setHotspotSSID] = useState('');
   const [hotspotPASS, setHotspotPASS] = useState('');
-  
+
   const [receivedCount, setReceivedCount] = useState(0);
   const [error, setError] = useState('');
   const [lastReceivedName, setLastReceivedName] = useState('');
@@ -45,7 +45,7 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
       try {
         const { ipcRenderer } = (window as any).require('electron');
         ipcRenderer.removeListener('wireless-photo-received', listenerRef.current);
-      } catch (e) {}
+      } catch (e) { }
       listenerRef.current = null;
     }
   }, [isElectron]);
@@ -57,10 +57,10 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
     setNetworkMode(mode);
     setHotspotSSID('');
     setHotspotPASS('');
-    
+
     try {
       const { ipcRenderer } = (window as any).require('electron');
-      
+
       let targetIP = '';
       if (mode === 'hotspot') {
         const hotspotResult = await ipcRenderer.invoke('start-hotspot');
@@ -112,7 +112,7 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
         try {
           const { ipcRenderer } = (window as any).require('electron');
           await ipcRenderer.invoke('stop-hotspot');
-        } catch (e) {}
+        } catch (e) { }
       }
     } finally {
       setIsStarting(false);
@@ -127,7 +127,7 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
       if (networkMode === 'hotspot') {
         await ipcRenderer.invoke('stop-hotspot');
       }
-    } catch (e) {}
+    } catch (e) { }
     cleanup();
     setServerRunning(false);
     setServerUrl('');
@@ -177,14 +177,14 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
   const canStart = activeTab === 'app' || (activeTab === 'folder' && savePath);
 
   const modalContent = (
-    <div 
+    <div
       className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in ${isKurdish ? 'font-kufi' : ''}`}
       dir={isKurdish ? 'rtl' : 'ltr'}
       role="dialog"
       aria-modal="true"
     >
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
-      
+
       <Card className="relative w-full max-w-lg animate-slide-up">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
@@ -215,22 +215,20 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
                 </p>
                 <div className="flex bg-muted/80 p-1.5 rounded-lg border border-border/50">
                   <button
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${
-                      activeTab === 'app'
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'app'
                         ? 'bg-background text-primary shadow-sm ring-1 ring-border/50'
                         : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                      }`}
                     onClick={() => handleTabChange('app')}
                   >
                     <ImagePlus size={16} />
                     {t('transfer.tab.app')}
                   </button>
                   <button
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${
-                      activeTab === 'folder'
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'folder'
                         ? 'bg-background text-primary shadow-sm ring-1 ring-border/50'
                         : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                      }`}
                     onClick={() => handleTabChange('folder')}
                   >
                     <Folder size={16} />
@@ -251,42 +249,42 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
                   )}
                 </div>
               )}
-              
+
               {/* Network Selection */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
                   {isKurdish ? 'شێوازی پەیوەندی' : 'Connection Method'}
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                <Button 
-                  onClick={() => startServer('standard')} 
-                  disabled={!canStart}
-                  variant="outline" 
-                  className="h-auto flex-col py-4 gap-3 hover:bg-primary/5 hover:border-primary/50"
-                >
-                  <div className="p-3 bg-muted rounded-full">
-                    <Wifi size={24} className="text-primary" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-semibold text-sm mb-1">{isKurdish ? 'وایەرلێس (ئاسایی)' : 'Wireless (Standard)'}</p>
-                    <p className="text-xs text-muted-foreground whitespace-normal">{isKurdish ? 'بەکارھێنانی وایفای ماڵەوە یان ئۆفیس' : 'Use existing Wi-Fi network'}</p>
-                  </div>
-                </Button>
-                
-                <Button 
-                  onClick={() => startServer('hotspot')} 
-                  disabled={!canStart}
-                  variant="outline" 
-                  className="h-auto flex-col py-4 gap-3 hover:bg-primary/5 hover:border-primary/50"
-                >
-                  <div className="p-3 bg-muted rounded-full">
-                    <Network size={24} className="text-primary" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-semibold text-sm mb-1">{isKurdish ? 'دروستکردنی هۆتسپۆت' : 'Create Hotspot'}</p>
-                    <p className="text-xs text-muted-foreground whitespace-normal">{isKurdish ? 'بەکارھێنان بێ بوونی ئینتەرنێت یان ڕاوتەر' : 'Use without internet or router'}</p>
-                  </div>
-                </Button>
+                  <Button
+                    onClick={() => startServer('standard')}
+                    disabled={!canStart}
+                    variant="outline"
+                    className="h-auto flex-col py-4 gap-3 hover:bg-primary/5 hover:border-primary/50"
+                  >
+                    <div className="p-3 bg-muted rounded-full">
+                      <Wifi size={24} className="text-primary" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-sm mb-1">{isKurdish ? 'وایەرلێس (ئاسایی)' : 'Wireless (Standard)'}</p>
+                      <p className="text-xs text-muted-foreground whitespace-normal">{isKurdish ? 'بەکارھێنانی وایفای ماڵەوە یان ئۆفیس' : 'Use existing Wi-Fi network'}</p>
+                    </div>
+                  </Button>
+
+                  <Button
+                    onClick={() => startServer('hotspot')}
+                    disabled={!canStart}
+                    variant="outline"
+                    className="h-auto flex-col py-4 gap-3 hover:bg-primary/5 hover:border-primary/50"
+                  >
+                    <div className="p-3 bg-muted rounded-full">
+                      <Network size={24} className="text-primary" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-sm mb-1">{isKurdish ? 'دروستکردنی هۆتسپۆت' : 'Create Hotspot'}</p>
+                      <p className="text-xs text-muted-foreground whitespace-normal">{isKurdish ? 'بەکارھێنان بێ بوونی ئینتەرنێت یان ڕاوتەر' : 'Use without internet or router'}</p>
+                    </div>
+                  </Button>
                 </div>
               </div>
             </>
@@ -315,7 +313,7 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
                   <Loader2 size={24} className="text-primary animate-spin" />
                 </div>
                 <p className="text-sm font-medium text-foreground mb-1">
-                  {networkMode === 'hotspot' 
+                  {networkMode === 'hotspot'
                     ? (isKurdish ? 'ئامادەکردنی هۆتسپۆت...' : 'Starting Hotspot...')
                     : (isKurdish ? 'پێکردنی سێرڤەر...' : 'Starting Server...')}
                 </p>
@@ -326,7 +324,7 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
             )
           ) : (
             <div className="flex flex-col items-center animate-in fade-in duration-300 space-y-4 pt-2">
-              
+
               {networkMode === 'hotspot' ? (
                 <div className="w-full flex gap-4">
                   <div className="flex-1 flex flex-col items-center">
@@ -341,9 +339,9 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
                       />
                     </div>
                     <p className="text-xs font-bold mb-1">{isKurdish ? '١. پەیوەستبوون بە وایفای' : '1. Connect to Wi-Fi'}</p>
-                    <p className="text-[10px] text-muted-foreground text-center">SSID: {hotspotSSID}<br/>Pass: {hotspotPASS}</p>
+                    <p className="text-[10px] text-muted-foreground text-center">SSID: {hotspotSSID}<br />Pass: {hotspotPASS}</p>
                   </div>
-                  
+
                   <div className="flex-1 flex flex-col items-center">
                     <div className="bg-white p-2 rounded-xl shadow-sm ring-1 ring-border mb-2">
                       <QRCodeSVG
@@ -382,14 +380,12 @@ export const WirelessTransferModal: React.FC<WirelessTransferModalProps> = ({ is
                 </>
               )}
 
-              <div className={`w-full flex items-center gap-3 p-3 rounded-lg border ${
-                receivedCount > 0 
-                  ? 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400' 
+              <div className={`w-full flex items-center gap-3 p-3 rounded-lg border ${receivedCount > 0
+                  ? 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400'
                   : 'bg-muted border-border text-foreground'
-              }`}>
-                <div className={`w-2 h-2 rounded-full animate-pulse ${
-                  receivedCount > 0 ? 'bg-green-500' : 'bg-primary'
-                }`} />
+                }`}>
+                <div className={`w-2 h-2 rounded-full animate-pulse ${receivedCount > 0 ? 'bg-green-500' : 'bg-primary'
+                  }`} />
                 <span className="text-sm font-medium flex-1">
                   {receivedCount > 0
                     ? activeTab === 'folder'

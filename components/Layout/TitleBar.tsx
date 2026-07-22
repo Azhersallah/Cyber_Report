@@ -5,20 +5,20 @@ const TitleBar: React.FC = () => {
   const [isMaximized, setIsMaximized] = useState(true);
 
   // Check if running in Electron
-  const isElectron = typeof window !== 'undefined' && 
+  const isElectron = typeof window !== 'undefined' &&
     (window as any).process?.type === 'renderer';
 
   useEffect(() => {
     if (!isElectron) return;
-    
+
     const checkMaximized = async () => {
       const { ipcRenderer } = (window as any).require('electron');
       const maximized = await ipcRenderer.invoke('window-is-maximized');
       setIsMaximized(maximized);
     };
-    
+
     checkMaximized();
-    
+
     // Listen for window state changes
     const interval = setInterval(checkMaximized, 500);
     return () => clearInterval(interval);
@@ -47,12 +47,12 @@ const TitleBar: React.FC = () => {
   if (!isElectron) return null;
 
   return (
-    <div 
+    <div
       className="h-8 bg-gray-100 dark:bg-[#1a1a1a] flex items-center justify-end px-2 select-none no-print"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* Window Controls */}
-      <div 
+      <div
         className="flex items-center gap-1"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >

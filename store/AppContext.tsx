@@ -123,7 +123,7 @@ function getGeneratedPagesCount(state: AppState, activePhotos: (Photo | null)[])
     if (idPhotoLayout === '1') numA6Sections = 1;
     else if (idPhotoLayout === '2') numA6Sections = 2;
     const capacity = numA6Sections * 12;
-    
+
     let currentSectionIndex = 0;
     let pageIndex = 0;
     while (currentSectionIndex < activePhotos.length || pageIndex < state.manualPageCount) {
@@ -147,7 +147,7 @@ function getGeneratedPagesCount(state: AppState, activePhotos: (Photo | null)[])
           else layoutId = 'businesscard';
         }
       }
-      
+
       const layoutDef = LAYOUTS.find(l => l.id === layoutId) || LAYOUTS[0];
       const capacity = layoutDef.capacity;
       if (layoutId !== 'onlytext') {
@@ -309,7 +309,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const { settings: incomingSettings, ...projectContent } = action.payload;
       // Preserve the API key when loading a project
       const preservedApiKey = state.settings.geminiApiKey;
-      
+
       // Ensure footerDate exists (backward compatibility)
       const today = new Date();
       const day = String(today.getDate()).padStart(2, '0');
@@ -329,7 +329,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const PHOTO_LAYOUTS = ['1', '2', '2col', '4', '1text', '1text-side', '2text', 'onlytext'];
       const cleanGlobalLayout = PHOTO_LAYOUTS.includes(projectContent.globalLayout) ? projectContent.globalLayout : '1';
       const cleanLastPhotosLayout = PHOTO_LAYOUTS.includes(projectContent.lastPhotosLayout) ? projectContent.lastPhotosLayout : '1';
-      
+
       const cleanPageLayouts: Record<number, LayoutType> = {};
       if (projectContent.pageLayouts) {
         for (const [pageStr, layout] of Object.entries(projectContent.pageLayouts)) {
@@ -437,7 +437,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const newPhotos = [...activePhotos];
       const incoming = action.payload;
       let incomingIndex = 0;
-      
+
       // Fill null/empty slots first
       for (let i = 0; i < newPhotos.length && incomingIndex < incoming.length; i++) {
         if (newPhotos[i] === null) {
@@ -445,12 +445,12 @@ const appReducer = (state: AppState, action: Action): AppState => {
           incomingIndex++;
         }
       }
-      
+
       // Append remaining incoming photos
       if (incomingIndex < incoming.length) {
         newPhotos.push(...incoming.slice(incomingIndex));
       }
-      
+
       return { ...state, [activeKey]: newPhotos };
     }
 
@@ -547,7 +547,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       const month = String(today.getMonth() + 1).padStart(2, '0');
       const year = today.getFullYear();
       const todayDate = `${day}/${month}/${year}`;
-      
+
       return {
         ...state,
         photos: [],
@@ -595,7 +595,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
           const group = parts[0];
           const p = parseInt(parts[1]);
           const local = parts[2];
-          
+
           if (p >= insertAtPageIndex) {
             newBusinessCardSizes[`${group}_${p + 1}_${local}`] = state.businessCardSizes[k];
           } else {
@@ -642,7 +642,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     case 'DELETE_PAGE': {
       const { pageIndex, startIndex, count } = action.payload;
       const totalCurrentPages = getGeneratedPagesCount(state, activePhotos);
-      
+
       if (totalCurrentPages <= 1) {
         // Just clear the contents of this single page, don't delete the page itself.
         const newPhotos = [...activePhotos];
@@ -651,7 +651,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
             newPhotos[i] = null;
           }
         }
-        
+
         const newPageTitles = { ...state.pageTitles };
         delete newPageTitles[pageIndex];
 
@@ -705,7 +705,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
           const group = parts[0];
           const p = parseInt(parts[1]);
           const local = parts[2];
-          
+
           if (p === pageIndex) {
             // Deleted page cards size, skip it
             return;
@@ -758,13 +758,13 @@ const appReducer = (state: AppState, action: Action): AppState => {
     case 'RESET_PAGE': {
       const { pageIndex, startIndex, count } = action.payload;
       const newPhotos = [...activePhotos];
-      
+
       if (count > 0 && startIndex < newPhotos.length) {
         for (let i = startIndex; i < startIndex + count && i < newPhotos.length; i++) {
           newPhotos[i] = null;
         }
       }
-      
+
       const newPageTitles = { ...state.pageTitles };
       delete newPageTitles[pageIndex];
 
@@ -863,7 +863,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
       return { ...state, zoom: Math.min(3.0, Math.max(0.2, action.payload)) };
     case 'SET_SECTION_INDEX':
       return { ...state, currentSectionIndex: action.payload };
-    
+
     // Resume Builder Reducers
     case 'UPDATE_RESUME_DATA':
       return {
@@ -871,7 +871,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         resumeData: {
           ...state.resumeData,
           ...action.payload,
-          personalInfo: action.payload.personalInfo 
+          personalInfo: action.payload.personalInfo
             ? { ...state.resumeData.personalInfo, ...action.payload.personalInfo }
             : state.resumeData.personalInfo,
           workExperience: action.payload.workExperience ?? state.resumeData.workExperience,
@@ -882,10 +882,10 @@ const appReducer = (state: AppState, action: Action): AppState => {
           customSections: action.payload.customSections ?? state.resumeData.customSections
         }
       };
-    
+
     case 'SET_RESUME_TEMPLATE':
       return { ...state, selectedResumeTemplate: action.payload };
-    
+
     case 'UPDATE_RESUME_CUSTOMIZATION': {
       const tpl = state.selectedResumeTemplate;
       const current = state.resumeCustomization[tpl] || {};
@@ -897,13 +897,13 @@ const appReducer = (state: AppState, action: Action): AppState => {
         }
       };
     }
-    
+
     case 'LOAD_RESUME_FROM_STORAGE':
       return { ...state, resumeData: action.payload };
-    
+
     case 'SET_RESUME_LANGUAGE':
       return { ...state, resumeLanguage: action.payload };
-    
+
     case 'CLEAR_RESUME_DATA':
       return {
         ...state,
@@ -1012,9 +1012,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
       if (action.payload < newCardPhotos.length) {
         newCardPhotos[action.payload] = null;
       }
-      return { 
-        ...state, 
-        businessCardSizes: sizes, 
+      return {
+        ...state,
+        businessCardSizes: sizes,
         cardPhotos: newCardPhotos,
         selectedBusinessCardIndex: state.selectedBusinessCardIndex === action.payload ? null : state.selectedBusinessCardIndex
       };
@@ -1046,7 +1046,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
           shouldBalance = true;
           const isEven = gIdx % 2 === 0;
           const offsets = isEven ? [0, 2, 4, 6, 8] : [1, 3, 5, 7, 9];
-          
+
           offsets.forEach(offset => {
             const idx = startIndex + offset;
             const idxKey = getCardSizeKey(idx, state.pageLayouts, state.globalLayout);
@@ -1148,7 +1148,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         ...state,
         stampData: initialState.stampData
       };
-    
+
     default:
       return state;
   }

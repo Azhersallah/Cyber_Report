@@ -61,7 +61,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, language = '
   useEffect(() => {
     if (window && (window as any).process?.type === 'renderer') {
       const { ipcRenderer } = (window as any).require('electron');
-      
+
       const handleUpdateStatus = (_event: any, status: UpdateStatus) => {
         setUpdateStatus(status);
       };
@@ -82,8 +82,8 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, language = '
       }
     } catch (err) {
       console.error('Check for updates failed:', err);
-      setUpdateStatus({ 
-        status: 'error', 
+      setUpdateStatus({
+        status: 'error',
         message: 'هەڵەیەک ڕوویدا',
         messageEn: 'An error occurred'
       });
@@ -156,14 +156,14 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, language = '
   };
 
   const modalContent = (
-    <div 
+    <div
       className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in ${isKurdish ? 'font-kufi' : ''}`}
       dir={isKurdish ? 'rtl' : 'ltr'}
       role="dialog"
       aria-modal="true"
     >
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      
+
       <Card className="relative w-full max-w-sm animate-slide-up">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
@@ -189,7 +189,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, language = '
             <p className={`text-sm ${updateStatus.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
               {getStatusMessage()}
             </p>
-            
+
             {updateStatus.version && (updateStatus.status === 'available' || updateStatus.status === 'downloading' || updateStatus.status === 'downloaded') && (
               <span className="inline-block mt-2 px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 rounded-full text-sm font-medium">
                 v{updateStatus.version}
@@ -201,7 +201,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose, language = '
           {updateStatus.status === 'downloading' && (
             <div className="mt-4 space-y-2">
               <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
                   style={{ width: `${updateStatus.percent || 0}%` }}
                 />

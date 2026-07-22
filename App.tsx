@@ -15,7 +15,7 @@ import { Card } from './components/ui/card';
 import { Photo, LayoutType, AppState } from './types';
 import { LAYOUTS, getLayoutCapacity } from './constants';
 import { getTranslation } from './utils/translations';
-import { Plus, ZoomIn, ZoomOut, Maximize, Image, Save, FolderOpen } from 'lucide-react';
+import { Plus, ZoomIn, ZoomOut, Maximize, Image } from 'lucide-react';
 import { decryptProjectData } from './utils/encryption';
 import { cn } from './lib/utils';
 import { ToastProvider, useToast } from './components/ui/toast';
@@ -100,12 +100,10 @@ const MainContent: React.FC = () => {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ pageIndex: number; startIndex: number; count: number } | null>(null);
   const [resetConfirmation, setResetConfirmation] = useState<{ pageIndex: number; startIndex: number; count: number } | null>(null);
   const [droppedProjectFile, setDroppedProjectFile] = useState<string | null>(null);
-  const [pendingProjectData, setPendingProjectData] = useState<{content: string; filePath?: string} | null>(null);
+  const [pendingProjectData, setPendingProjectData] = useState<{ content: string; filePath?: string } | null>(null);
   const [newlyAddedPageIndex, setNewlyAddedPageIndex] = useState<number | null>(null);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
-  const [saveProgress, setSaveProgress] = useState<{ percent: number; stage?: string } | null>(null);
-  const [loadProgress, setLoadProgress] = useState<{ percent: number; stage?: string } | null>(null);
   const importTotalRef = useRef(0);
   const t = (key: string) => getTranslation(key, state.language);
 
@@ -124,61 +122,14 @@ const MainContent: React.FC = () => {
       importTotalRef.current = 0;
     };
 
-    const handleSaveStart = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      setSaveProgress({ percent: detail?.percent || 0, stage: detail?.stage || 'encrypt' });
-    };
-    const handleSaveProgress = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      setSaveProgress({ percent: detail.percent, stage: detail.stage });
-    };
-    const handleSaveEnd = () => {
-      setSaveProgress(null);
-    };
-
-    const loadTimeoutRef = { current: null as any };
-
-    const handleLoadStart = (e: Event) => {
-      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-      const detail = (e as CustomEvent).detail;
-      setLoadProgress({ percent: detail?.percent || 0, stage: detail?.stage || 'read' });
-      loadTimeoutRef.current = setTimeout(() => setLoadProgress(null), 10000);
-    };
-    const handleLoadProgress = (e: Event) => {
-      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-      const detail = (e as CustomEvent).detail;
-      setLoadProgress({ percent: detail.percent, stage: detail.stage });
-      loadTimeoutRef.current = setTimeout(() => setLoadProgress(null), 10000);
-    };
-    const handleLoadEnd = () => {
-      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-      setLoadProgress(null);
-    };
-
     window.addEventListener('image-import-start', handleStart);
     window.addEventListener('image-import-progress', handleProgress);
     window.addEventListener('image-import-end', handleEnd);
-
-    window.addEventListener('project-save-start', handleSaveStart);
-    window.addEventListener('project-save-progress', handleSaveProgress);
-    window.addEventListener('project-save-end', handleSaveEnd);
-
-    window.addEventListener('project-load-start', handleLoadStart);
-    window.addEventListener('project-load-progress', handleLoadProgress);
-    window.addEventListener('project-load-end', handleLoadEnd);
 
     return () => {
       window.removeEventListener('image-import-start', handleStart);
       window.removeEventListener('image-import-progress', handleProgress);
       window.removeEventListener('image-import-end', handleEnd);
-
-      window.removeEventListener('project-save-start', handleSaveStart);
-      window.removeEventListener('project-save-progress', handleSaveProgress);
-      window.removeEventListener('project-save-end', handleSaveEnd);
-
-      window.removeEventListener('project-load-start', handleLoadStart);
-      window.removeEventListener('project-load-progress', handleLoadProgress);
-      window.removeEventListener('project-load-end', handleLoadEnd);
     };
   }, []);
 
@@ -211,82 +162,58 @@ const MainContent: React.FC = () => {
       const { ipcRenderer } = (window as any).require('electron');
 
       const handleOpenEncryptedProject = async (event: any, data: string | { content: string, filePath: string }) => {
-        window.dispatchEvent(new CustomEvent('project-load-start', { detail: { percent: 5, stage: 'read' } }));
         try {
           // Handle both old format (string) and new format (object)
           const content = typeof data === 'string' ? data : data.content;
           const filePath = typeof data === 'object' && data.filePath ? data.filePath : undefined;
-          
+
           // Check if there's already a project loaded (user has photos or settings changed)
           // If not, load directly without confirmation (this is a new window from double-click)
           const hasProject = state.photos.length > 0 || state.cardPhotos.length > 0;
-          
+
           if (hasProject) {
             // Show confirmation dialog - user might lose unsaved changes
             setPendingProjectData({ content, filePath });
           } else {
             // Load directly - this is a fresh window, no data to lose
             const decryptedJson = await decryptProjectData(content);
-
-            window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 90, stage: 'parse' } }));
-            await new Promise(r => setTimeout(r, 20));
-
             const parsed = JSON.parse(decryptedJson);
-
-            window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 96, stage: 'render' } }));
-            await new Promise(r => setTimeout(r, 20));
-
             dispatch({ type: 'LOAD_PROJECT', payload: parsed });
-            
+
             // Set the file path so the title shows the project name
             if (filePath) {
               ipcRenderer.invoke('set-current-project-path', filePath);
               // Also send event to Header to update currentFilePath state
               window.dispatchEvent(new CustomEvent('project-file-path-changed', { detail: filePath }));
             }
-            await new Promise(r => setTimeout(r, 100));
           }
         } catch (err) {
           console.error("IPC Opening Failed:", err);
           alert("Could not open this project file. It may be corrupted or encrypted with a different key.");
-        } finally {
-          window.dispatchEvent(new CustomEvent('project-load-end'));
         }
       };
 
       ipcRenderer.on('open-project-encrypted', handleOpenEncryptedProject);
-      
+
       // Check for pending file to open immediately after mount (fixes double-click open timing issues)
       ipcRenderer.invoke('get-pending-file').then(async (result: any) => {
         if (result && result.success && result.content) {
-          window.dispatchEvent(new CustomEvent('project-load-start', { detail: { percent: 5, stage: 'read' } }));
           try {
             // On initial mount, photos array is always empty, so load directly without confirmation
             // This handles the double-click startup case
             const decryptedJson = await decryptProjectData(result.content);
-
-            window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 90, stage: 'parse' } }));
-            await new Promise(r => setTimeout(r, 20));
-
             const parsed = JSON.parse(decryptedJson);
-
-            window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 96, stage: 'render' } }));
-            await new Promise(r => setTimeout(r, 20));
-
             dispatch({ type: 'LOAD_PROJECT', payload: parsed });
-            
+
             // Set the file path so the title shows the project name
             if (result.filePath) {
               ipcRenderer.invoke('set-current-project-path', result.filePath);
               // Also send event to Header to update currentFilePath state
               window.dispatchEvent(new CustomEvent('project-file-path-changed', { detail: result.filePath }));
             }
-            await new Promise(r => setTimeout(r, 100));
           } catch (err) {
             console.error("Failed to load pending file:", err);
             alert("Could not open this project file. It may be corrupted or encrypted with a different key.");
-          } finally {
-            window.dispatchEvent(new CustomEvent('project-load-end'));
           }
         }
       });
@@ -309,14 +236,14 @@ const MainContent: React.FC = () => {
 
       const file = files[0];
       const fileLower = file.name.toLowerCase();
-      
+
       // Check if drop is happening inside a modal/dialog - if so, ignore it
       const targetElement = e.target as HTMLElement;
-      const isInsideModal = targetElement.closest('[role="dialog"]') || 
-                           targetElement.closest('.modal') || 
-                           targetElement.closest('[data-dialog]') ||
-                           targetElement.closest('[data-radix-popper-content-wrapper]');
-      
+      const isInsideModal = targetElement.closest('[role="dialog"]') ||
+        targetElement.closest('.modal') ||
+        targetElement.closest('[data-dialog]') ||
+        targetElement.closest('[data-radix-popper-content-wrapper]');
+
       if (isInsideModal) {
         // Let the modal handle its own drops
         return;
@@ -895,7 +822,7 @@ const MainContent: React.FC = () => {
           isDestructive={true}
         />
       )}
-      
+
       {droppedProjectFile && (
         <ConfirmModal
           isOpen={true}
@@ -904,23 +831,13 @@ const MainContent: React.FC = () => {
           confirmLabel={state.language === 'ku' ? 'کردنەوە' : 'Load Project'}
           cancelLabel={state.language === 'ku' ? 'پاشگەزبوونەوە' : 'Cancel'}
           onConfirm={async () => {
-            window.dispatchEvent(new CustomEvent('project-load-start', { detail: { percent: 5, stage: 'read' } }));
             try {
-              await new Promise(r => setTimeout(r, 20));
               const fs = (window as any).require('fs');
               const content = fs.readFileSync(droppedProjectFile, 'utf-8');
               const decryptedJson = await decryptProjectData(content);
-
-              window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 90, stage: 'parse' } }));
-              await new Promise(r => setTimeout(r, 20));
-
               const parsed = JSON.parse(decryptedJson);
-
-              window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 96, stage: 'render' } }));
-              await new Promise(r => setTimeout(r, 20));
-
               dispatch({ type: 'LOAD_PROJECT', payload: parsed });
-              
+
               // Set the file path so the title shows the project name
               console.log('[Drag&Drop] Setting file path:', droppedProjectFile);
               if (window && (window as any).process && (window as any).process.type === 'renderer') {
@@ -931,25 +848,22 @@ const MainContent: React.FC = () => {
                 window.dispatchEvent(new CustomEvent('project-file-path-changed', { detail: droppedProjectFile }));
                 console.log('[Drag&Drop] Custom event dispatched:', droppedProjectFile);
               }
-              
+
               // Show success toast
               showToast(t('toast.projectOpened'), 'success');
-              
+
               setDroppedProjectFile(null);
-              await new Promise(r => setTimeout(r, 100));
             } catch (err) {
               console.error('Failed to load dropped project:', err);
               showToast(t('toast.openFailed'), 'error');
               setDroppedProjectFile(null);
-            } finally {
-              window.dispatchEvent(new CustomEvent('project-load-end'));
             }
           }}
           onClose={() => setDroppedProjectFile(null)}
           isDestructive={false}
         />
       )}
-      
+
       {pendingProjectData && (
         <ConfirmModal
           isOpen={true}
@@ -958,21 +872,11 @@ const MainContent: React.FC = () => {
           confirmLabel={state.language === 'ku' ? 'کردنەوە' : 'Load Project'}
           cancelLabel={state.language === 'ku' ? 'پاشگەزبوونەوە' : 'Cancel'}
           onConfirm={async () => {
-            window.dispatchEvent(new CustomEvent('project-load-start', { detail: { percent: 5, stage: 'read' } }));
             try {
-              await new Promise(r => setTimeout(r, 20));
               const decryptedJson = await decryptProjectData(pendingProjectData.content);
-
-              window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 90, stage: 'parse' } }));
-              await new Promise(r => setTimeout(r, 20));
-
               const parsed = JSON.parse(decryptedJson);
-
-              window.dispatchEvent(new CustomEvent('project-load-progress', { detail: { percent: 96, stage: 'render' } }));
-              await new Promise(r => setTimeout(r, 20));
-
               dispatch({ type: 'LOAD_PROJECT', payload: parsed });
-              
+
               // Set the file path so the title shows the project name
               if (pendingProjectData.filePath && window && (window as any).process && (window as any).process.type === 'renderer') {
                 const { ipcRenderer } = (window as any).require('electron');
@@ -980,18 +884,15 @@ const MainContent: React.FC = () => {
                 // Also send event to Header to update currentFilePath state
                 window.dispatchEvent(new CustomEvent('project-file-path-changed', { detail: pendingProjectData.filePath }));
               }
-              
+
               // Show success toast
               showToast(t('toast.projectOpened'), 'success');
-              
+
               setPendingProjectData(null);
-              await new Promise(r => setTimeout(r, 100));
             } catch (err) {
               console.error("Failed to load project:", err);
               showToast(t('toast.openFailed'), 'error');
               setPendingProjectData(null);
-            } finally {
-              window.dispatchEvent(new CustomEvent('project-load-end'));
             }
           }}
           onClose={() => setPendingProjectData(null)}
@@ -1015,8 +916,8 @@ const MainContent: React.FC = () => {
                   {state.language === 'ku' ? 'بارکردنی وێنەکان...' : 'Importing Images...'}
                 </h3>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {state.language === 'ku' 
-                    ? 'تکایە چاوەڕێ بکە تا وێنەکان ڕێکدەخرێن' 
+                  {state.language === 'ku'
+                    ? 'تکایە چاوەڕێ بکە تا وێنەکان ڕێکدەخرێن'
                     : 'Please wait while images are being processed'}
                 </p>
               </div>
@@ -1024,96 +925,14 @@ const MainContent: React.FC = () => {
 
             <div className="space-y-2">
               <div className="w-full h-2 rounded-full bg-muted overflow-hidden relative border border-border/20">
-                <div 
-                  className="h-full bg-primary rounded-full transition-all duration-300 ease-out" 
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
                   style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
                 />
               </div>
               <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 <span>{Math.round((importProgress.current / importProgress.total) * 100)}%</span>
                 <span>{importProgress.current} / {importProgress.total}</span>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {saveProgress && (
-        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in ${state.language === 'ku' ? 'font-kufi' : 'font-sans'}`} dir={state.language === 'ku' ? 'rtl' : 'ltr'}>
-          <Card className="w-full max-w-sm p-6 bg-card border border-border shadow-xl rounded-xl animate-slide-up space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0 animate-pulse">
-                <Save size={20} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold text-foreground truncate">
-                  {state.language === 'ku' ? 'سەیڤکردنی پڕۆژە...' : 'Saving Project...'}
-                </h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {state.language === 'ku' 
-                    ? 'تکایە چاوەڕێ بکە تا پڕۆژەکە سەیڤ دەکرێت' 
-                    : 'Please wait while the project is being saved'}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="w-full h-2 rounded-full bg-muted overflow-hidden relative border border-border/20">
-                <div 
-                  className="h-full bg-primary rounded-full transition-all duration-300 ease-out" 
-                  style={{ width: `${saveProgress.percent}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                <span>{saveProgress.percent}%</span>
-                <span>
-                  {saveProgress.stage === 'encrypt' 
-                    ? (state.language === 'ku' ? 'ئینکریپتکردن' : 'Encrypting')
-                    : saveProgress.stage === 'write'
-                    ? (state.language === 'ku' ? 'تۆمارکردنی فایل' : 'Writing File')
-                    : (state.language === 'ku' ? 'ئامادەکردن' : 'Processing')}
-                </span>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {loadProgress && (
-        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in ${state.language === 'ku' ? 'font-kufi' : 'font-sans'}`} dir={state.language === 'ku' ? 'rtl' : 'ltr'}>
-          <Card className="w-full max-w-sm p-6 bg-card border border-border shadow-xl rounded-xl animate-slide-up space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0 animate-pulse">
-                <FolderOpen size={20} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold text-foreground truncate">
-                  {state.language === 'ku' ? 'کردنەوەی پڕۆژە...' : 'Opening Project...'}
-                </h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {state.language === 'ku' 
-                    ? 'تکایە چاوەڕێ بکە تا پڕۆژەکە دەکرێتەوە' 
-                    : 'Please wait while the project is being opened'}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="w-full h-2 rounded-full bg-muted overflow-hidden relative border border-border/20">
-                <div 
-                  className="h-full bg-primary rounded-full transition-all duration-300 ease-out" 
-                  style={{ width: `${loadProgress.percent}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                <span>{loadProgress.percent}%</span>
-                <span>
-                  {loadProgress.stage === 'decrypt' 
-                    ? (state.language === 'ku' ? 'شیکردنەوە (Decrypt)' : 'Decrypting')
-                    : loadProgress.stage === 'parse'
-                    ? (state.language === 'ku' ? 'دابەشکردنی داتا' : 'Parsing Data')
-                    : (state.language === 'ku' ? 'خوێندنەوە' : 'Reading File')}
-                </span>
               </div>
             </div>
           </Card>

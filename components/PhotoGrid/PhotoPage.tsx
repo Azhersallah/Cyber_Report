@@ -1564,7 +1564,6 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                                                     onClick={(e) => e.stopPropagation()}
                                                     onPointerDown={(e) => e.stopPropagation()}
                                                     onPointerUp={(e) => e.stopPropagation()}
-                                                    onSelectStart={(e) => e.preventDefault()}
                                                     onDragStart={(e) => e.preventDefault()}
                                                     className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
                                                 />
@@ -1590,7 +1589,6 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                                                     onClick={(e) => e.stopPropagation()}
                                                     onPointerDown={(e) => e.stopPropagation()}
                                                     onPointerUp={(e) => e.stopPropagation()}
-                                                    onSelectStart={(e) => e.preventDefault()}
                                                     onDragStart={(e) => e.preventDefault()}
                                                     className="w-full accent-zinc-800 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
                                                 />
@@ -1722,7 +1720,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                         contentEditable
                         suppressContentEditableWarning
                         onBlur={handleTitleBlur}
-                        className="font-bold outline-none border-b border-transparent focus:border-primary transition-colors inline-block min-w-[100px] text-black"
+                        className="font-bold outline-none border-b border-transparent focus:border-primary transition-colors inline-block min-w-[100px] text-black [&_*]:!font-[family-name:inherit]"
                         style={{ 
                             fontSize: `${settings.defaultTitleFontSize}px`,
                             color: 'black',
@@ -1752,7 +1750,7 @@ const PhotoPage: React.FC<PhotoPageProps> = memo(({
                            contentEditable
                            suppressContentEditableWarning
                            onBlur={handleSubtitleBlur}
-                           className="w-full text-center outline-none border-b border-transparent focus:border-primary transition-colors text-muted-foreground"
+                           className="w-full text-center outline-none border-b border-transparent focus:border-primary transition-colors text-muted-foreground [&_*]:!font-[family-name:inherit]"
                            style={{ 
                                fontSize: `${Math.max(12, (settings.defaultTitleFontSize || 20) - 6)}px`,
                                color: '#666',
